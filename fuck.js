@@ -5,8 +5,12 @@
  */
 
 
-const addon = require('./build/Release/addon');
+const addon = require('./build/Release/client');
 
 addon.connect();
 
 //console.log("from fuck:" + addon.fuck());
+
+setTimeout(()=>{
+    process.kill(process.pid);
+},2000);

@@ -1,4 +1,4 @@
-const addon = require('./build/Release/addon');
+const addon = require('./build/Release/server');
 
 const child_process = require("child_process");
 
@@ -6,10 +6,7 @@ const child_process = require("child_process");
 
 addon.listen();
 
+let fuck = child_process.fork("./fuck.js");
 
 
-setTimeout(()=>{
-    let fuck = child_process.fork("./fuck.js");
-    //console.log(addon.hello());
-},1000);
 

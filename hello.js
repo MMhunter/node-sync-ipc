@@ -3,10 +3,29 @@ const addon = require('./build/Release/server');
 const child_process = require("child_process");
 
 
-
-addon.listen();
-
-let fuck = child_process.fork("./fuck.js");
+//
+// addon.listen();
 
 
+
+
+//
+// setTimeout(()=>{
+//
+//     process.exit(0);
+// },3000);
+
+let i = 0;
+setInterval(()=>{
+    console.log(i);
+    i++;
+},1000);
+
+setTimeout(()=>{
+    let fuck = child_process.fork("./fuck.js");
+},200);
+
+process.on('exit',function(){
+    addon.stop();
+});
 

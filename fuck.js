@@ -7,10 +7,26 @@
 
 const addon = require('./build/Release/client');
 
+console.log("hahaha");
+
 addon.connect();
 
 //console.log("from fuck:" + addon.fuck());
 
-setTimeout(()=>{
-    process.kill(process.pid);
-},2000);
+
+
+// setTimeout(()=>{
+//     process.exit(0);
+// },20000);
+let i = 0;
+setInterval(()=>{
+    addon.write("haha");
+    console.log("fuck"+i);
+    i++;
+
+    console.log("fuck 2"+i);
+},1000);
+
+process.on('exit',function(){
+    addon.stop();
+});

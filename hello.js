@@ -9,11 +9,11 @@ const child_process = require("child_process");
 
 
 
-//
-// setTimeout(()=>{
-//
-//     process.exit(0);
-// },3000);
+
+
+setTimeout(()=>{
+   addon.unlock();
+},2000);
 
 let i = 0;
 setInterval(()=>{

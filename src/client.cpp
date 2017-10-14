@@ -2,7 +2,11 @@
 #include <uv.h>
 #include <nan.h>
 #include <string.h>
-
+#ifdef _WIN32
+char* pipename = "\\\\.\\pipe\\nodePipe";
+#else
+char* pipename = "nodePipe";
+#endif
 
 
 namespace demo {
@@ -19,14 +23,33 @@ namespace demo {
 
     int connected = 1;
 
-    uv_loop_t *loop = NULL;
+    char testValue[100] = "1231";
+
     uv_pipe_t* client_handle;
+
+    uv_loop_t * ipc_loop = NULL;
 
     typedef struct {
         uv_write_t req;
         uv_buf_t buf;
     } write_req_t;
 
+
+    char* subString (const char* input, int offset, int len, char* dest)
+    {
+      int input_len = strlen (input);
+
+      if (offset + len > input_len)
+      {
+         return NULL;
+      }
+
+      strncpy (dest, input + offset, len);
+
+      dest[len+1] = 0;
+
+      return dest;
+    }
 
     const char* ToCString(const String::Utf8Value& value) {
           return *value ? *value : "<string conversion failed>";
@@ -43,8 +66,8 @@ namespace demo {
     void wait_for_a_while(uv_idle_t* handle) {
 
         test ++ ;
-        if(test > 10e6){
-         uv_idle_stop(handle);
+        if(test > 100){
+            uv_idle_stop(handle);
         }
 
     }
@@ -64,6 +87,9 @@ namespace demo {
 
     void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
 
+
+        fprintf(stdout,"Client Read start \n");
+
         if(buf->base[0] == ' '){
             free(buf->base);
             return;
@@ -71,6 +97,12 @@ namespace demo {
 
         if (nread > 0) {
             fprintf(stdout,"Client Read %ld: %s \n",nread,buf->base);
+            if(buf->base[0] == 'T' && buf->base[1] == ':'){
+                subString(buf->base,2,strlen(buf->base)-2,testValue);
+                uv_read_stop(client);
+//                uv_close((uv_handle_t*) client, NULL);
+            }
+
 //            write_req_t *req = (write_req_t*) malloc(sizeof(write_req_t));
 //            req->buf = uv_buf_init(buf->base, nread);
 //            uv_write(&req->req, client, &req->buf, 1, echo_write);
@@ -91,7 +123,7 @@ namespace demo {
                fprintf(stderr, "Client Write error %s\n", uv_err_name(status));
        }
        else fprintf(stderr, "Client Write success %s\n", uv_err_name(status));
-       free_write_req(req);
+       //free_write_req(req);
     }
 
 
@@ -105,59 +137,84 @@ namespace demo {
 
         fprintf(stdout,"client connected %d \n", status);
 
-
-
         uv_read_start((uv_stream_t*) req->handle, alloc_buffer, echo_read);
+
+//        write_req_t *wreq = (write_req_t*) malloc(sizeof(write_req_t));
+//
+//        wreq->buf = uv_buf_init("test\n", 5);
+//
+//        uv_write(&wreq->req, (uv_stream_t *)client_handle, &wreq->buf, 1, write_cb);
 
         connected = 1;
     }
 
 
-    void wait_for_a_connection(uv_idle_t* handle) {
+    void wait_for_value(uv_idle_t* handle) {
 
-        if (connected){
+        if (testValue != NULL){
              uv_idle_stop(handle);
         }
 
     }
 
-    void connectL(uv_work_t* r){
+//    void connectL(uv_work_t* r){
+//
+//
+//
+//       uv_connect_t* req = new uv_connect_t;
+//
+//       client_handle = new uv_pipe_t;
+//
+//       uv_pipe_init(uv_default_loop(), client_handle,0);
+//
+//       uv_pipe_connect(req, client_handle, pipename, on_client_connected);
+//
+////       uv_run(loop,UV_RUN_DEFAULT);
+////
+////       uv_loop_close(loop);
+//
+//       return;
+//    }
 
-       loop = new uv_loop_t;
-       uv_loop_init(loop);
-       uv_connect_t* req = new uv_connect_t;
-       client_handle = new uv_pipe_t;
+    void connect(){
 
-       uv_pipe_init(loop, client_handle,0);
+            ipc_loop = new uv_loop_t;
 
-       uv_pipe_connect(req, client_handle, "echo.sock", on_client_connected);
+            uv_loop_init(ipc_loop);
+    //        uv_queue_work(uv_default_loop(),req,connectL,NULL);
+           uv_idle_t idler;
 
-       uv_run(loop,UV_RUN_DEFAULT);
+           uv_idle_init(ipc_loop, &idler);
+           uv_idle_start(&idler, wait_for_a_while);
 
-       uv_loop_close(loop);
-        return;
-    }
+           uv_connect_t* req = new uv_connect_t;
+
+           client_handle = new uv_pipe_t;
+
+           uv_pipe_init(ipc_loop, client_handle,0);
+
+           uv_pipe_connect(req, client_handle, pipename, on_client_connected);
+
+           uv_run(ipc_loop,UV_RUN_DEFAULT);
+
+           fprintf(stdout,"connect loop successfully closed\n");
+
+           uv_loop_close(ipc_loop);
+
+           //delete ipc_loop;
+
+           //ipc_loop = NULL;
+        }
 
     NAN_METHOD(connect){
 
-
-
-
-
-        uv_work_t *req = new uv_work_t;
-
-        uv_queue_work(uv_default_loop(),req,connectL,NULL);
-//       uv_idle_t idler;
-//
-//       uv_idle_init(uv_default_loop(), &idler);
-//       uv_idle_start(&idler, wait_for_a_while);
-//
-//       uv_run(loop,UV_RUN_DEFAULT);
-//
-//       uv_loop_close(loop);
+       connect();
 
        return;
     }
+
+
+
 
     NAN_METHOD(stop){
 
@@ -168,7 +225,6 @@ namespace demo {
                fprintf(stderr, "shutdown err %s\n", uv_err_name(r));
         }
         uv_close((uv_handle_t *) client_handle,NULL);
-        uv_loop_close(loop);
         //exit(0);
         return;
 
@@ -187,9 +243,9 @@ namespace demo {
 
               write_req_t *req = (write_req_t*) malloc(sizeof(write_req_t));
 
-              req->buf = uv_buf_init(buffer, strlen(buffer));
+              req->buf = uv_buf_init(buffer, strlen(buffer)+1);
 
-              fprintf(stdout,"attempt to write :%s, size %lu",buffer, sizeof buffer);
+              fprintf(stdout,"attempt to write :%s, size %lu \n",buffer, sizeof buffer);
 
               uv_write(&req->req, (uv_stream_t *)client_handle, &req->buf, 1, write_cb);
 
@@ -198,10 +254,20 @@ namespace demo {
         }
     }
 
+    NAN_METHOD(getValue){
+
+        fprintf(stdout,"attempt to getValue\n");
+
+        connect();
+
+        info.GetReturnValue().Set(Nan::New<v8::String>(testValue).ToLocalChecked());
+    }
+
 
     void init(Local<Object> exports) {
       Nan::SetMethod(exports, "stop", stop);
-      Nan::SetMethod(exports, "connect", connect);
+      Nan::SetMethod(exports, "getValue", getValue);
+      //Nan::SetMethod(exports, "connect", connect);
       Nan::SetMethod(exports, "write", write);
     }
 

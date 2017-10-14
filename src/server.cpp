@@ -1,8 +1,11 @@
 #include <node.h>
 #include <uv.h>
 #include <nan.h>
-
-
+#ifdef _WIN32
+char* pipename = "\\\\.\\pipe\\nodePipe";
+#else
+char* pipename = "nodePipe";
+#endif
 
 namespace demo {
 
@@ -21,6 +24,8 @@ int64_t counter = 0;
 uv_loop_t * loop_s = NULL;
 
 uv_pipe_t * server_handle = NULL;
+
+uv_stream_t * client_handle_default = NULL;
 
 typedef struct {
     uv_write_t req;
@@ -65,8 +70,13 @@ void remove_sock(int sig) {
 //    if (r != 0) {
 //        fprintf(stderr, "remove sock error %s\n", uv_err_name(r));
 //    }
-    uv_close((uv_handle_t *) server_handle,stop_loop);
-
+//    uv_close((uv_handle_t *) server_handle,stop_loop);
+    if(uv_loop_alive(loop_s)){
+        uv_close((uv_handle_t *) server_handle,stop_loop);
+    }
+    else{
+        exit(0);
+    }
 }
 
 void free_write_req(uv_write_t *req) {
@@ -79,10 +89,12 @@ void echo_write(uv_write_t *req, int status) {
     if (status < 0) {
         fprintf(stderr, "Write error %s\n", uv_err_name(status));
     }
-    free_write_req(req);
+    //free_write_req(req);
 }
 
 void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
+
+
 
     if(buf->base[0] == ' '){
         free(buf->base);
@@ -91,9 +103,9 @@ void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
 
     if (nread > 0) {
         fprintf(stdout,"Server Read %ld: %s \n",nread,buf->base);
-        write_req_t *req = (write_req_t*) malloc(sizeof(write_req_t));
-        req->buf = uv_buf_init(buf->base, nread);
-        uv_write(&req->req, client, &req->buf, 1, echo_write);
+//        write_req_t *req = (write_req_t*) malloc(sizeof(write_req_t));
+//        req->buf = uv_buf_init(buf->base, nread);
+//        uv_write(&req->req, client, &req->buf, 1, echo_write);
         return;
     }
 
@@ -113,12 +125,18 @@ void createL(){
     uv_loop_init(loop_s);
     server_handle  = new uv_pipe_t;
     uv_pipe_init(loop_s, server_handle,0);
+
+    #ifdef _WIN32
+    #else
     signal(SIGINT, remove_sock);
+    #endif
+
+
 //    struct sockaddr_in bind_addr;
 //    uv_ip4_addr("0.0.0.0", 7000, &bind_addr);
 //    uv_pipe_bind(server_handle, (const struct sockaddr *)&bind_addr, 0);
     int r;
-    if ((r = uv_pipe_bind(server_handle, "echo.sock"))) {
+    if ((r = uv_pipe_bind(server_handle, pipename))) {
         fprintf(stderr, "Bind error %s\n", uv_err_name(r));
         return;
     }
@@ -127,7 +145,7 @@ void createL(){
         return;
     }
 
-    fprintf(stderr, "Bind success \n");
+    printf("Bind success \n");
 
     //uv_run(loop_s,UV_RUN_DEFAULT);
 
@@ -149,25 +167,6 @@ void write_cb(uv_write_t* req, int status) {
    }
 }
 
-//NAN_METHOD(listen) {
-//
-//    //signal(SIGINT, remove_sock);
-//    uv_work_t *req = new uv_work_t;
-//    uv_queue_work(uv_default_loop(), req, createL, NULL);
-//
-//    return;
-//
-//}
-//
-//NAN_METHOD(connect){
-//
-//    uv_work_t *req = new uv_work_t;
-//    uv_queue_work(uv_default_loop(), req, connectL, NULL);
-//
-//    return;
-//
-//
-//}
 
 
 
@@ -194,10 +193,24 @@ NAN_METHOD(stop){
 
 }
 
+NAN_METHOD(unlock){
+
+    if(client_handle_default != NULL){
+
+        write_req_t *req = (write_req_t*) malloc(sizeof(write_req_t));
+        char * test = "T:testkeke";
+        req->buf = uv_buf_init(test, strlen(test)+1);
+        uv_write(&req->req, client_handle_default, &req->buf, 1, echo_write);
+        fprintf(stdout,"server write:%s",test);
+    }
+
+}
+
 void init(Local<Object> exports) {
 //  NODE_SET_METHOD(exports, "hello", Method);
 //  NODE_SET_METHOD(exports, "fuck", SetMethod);
     Nan::SetMethod(exports, "stop", stop);
+    Nan::SetMethod(exports, "unlock", unlock);
     createL();
 
 }
@@ -216,6 +229,7 @@ void on_new_connection(uv_stream_t *server, int status) {
     uv_pipe_init(loop_s,client,0);
     if (uv_accept(server, (uv_stream_t*) client) == 0) {
         fprintf(stderr,"accepted \n");
+client_handle_default = (uv_stream_t*) client;
         uv_read_start((uv_stream_t*) client, alloc_buffer, echo_read);
     }
     else {

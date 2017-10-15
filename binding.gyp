@@ -2,7 +2,7 @@
   "targets": [
     {
       "target_name": "server",
-      "sources": [ "src/server.cpp" ],
+      "sources": ["src/server.cpp" ],
       "include_dirs" : [
             "<!(node -e \"require('nan')\")"
         ]

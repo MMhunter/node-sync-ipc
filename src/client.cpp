@@ -23,53 +23,29 @@ namespace demo {
 
     int connected = 1;
 
-    char testValue[100] = "1231";
+    char * returnValue;
+
+    char * writeValue;
 
     uv_pipe_t* client_handle;
 
     uv_loop_t * ipc_loop = NULL;
+
+    long pid;
 
     typedef struct {
         uv_write_t req;
         uv_buf_t buf;
     } write_req_t;
 
-
-    char* subString (const char* input, int offset, int len, char* dest)
-    {
-      int input_len = strlen (input);
-
-      if (offset + len > input_len)
-      {
-         return NULL;
-      }
-
-      strncpy (dest, input + offset, len);
-
-      dest[len+1] = 0;
-
-      return dest;
-    }
-
     const char* ToCString(const String::Utf8Value& value) {
           return *value ? *value : "<string conversion failed>";
     }
-
-    void on_new_connection(uv_stream_t *q, int status);
 
 
     void alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
       buf->base = (char *) malloc(suggested_size);
       buf->len = suggested_size;
-    }
-
-    void wait_for_a_while(uv_idle_t* handle) {
-
-        test ++ ;
-        if(test > 100){
-            uv_idle_stop(handle);
-        }
-
     }
 
     void free_write_req(uv_write_t *req) {
@@ -78,34 +54,17 @@ namespace demo {
         free(wr);
     }
 
-    void echo_write(uv_write_t *req, int status) {
-        if (status < 0) {
-            fprintf(stderr, "Write error %s\n", uv_err_name(status));
-        }
-        free_write_req(req);
-    }
 
-    void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
-
-
-        fprintf(stdout,"Client Read start \n");
-
-        if(buf->base[0] == ' '){
-            free(buf->base);
-            return;
-        }
+    void on_read_value(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
 
         if (nread > 0) {
             fprintf(stdout,"Client Read %ld: %s \n",nread,buf->base);
-            if(buf->base[0] == 'T' && buf->base[1] == ':'){
-                subString(buf->base,2,strlen(buf->base)-2,testValue);
-                uv_read_stop(client);
-//                uv_close((uv_handle_t*) client, NULL);
-            }
 
-//            write_req_t *req = (write_req_t*) malloc(sizeof(write_req_t));
-//            req->buf = uv_buf_init(buf->base, nread);
-//            uv_write(&req->req, client, &req->buf, 1, echo_write);
+            returnValue = new char[strlen(buf->base)];
+
+            strcpy(returnValue,buf->base);
+            uv_read_stop(client);
+            uv_close((uv_handle_t *) client,NULL);
         }
 
         if (nread < 0) {
@@ -123,9 +82,19 @@ namespace demo {
                fprintf(stderr, "Client Write error %s\n", uv_err_name(status));
        }
        else fprintf(stderr, "Client Write success %s\n", uv_err_name(status));
-       //free_write_req(req);
+       free_write_req(req);
     }
 
+    void write_value_to_server(uv_write_t* req, int status){
+
+        write_cb(req, status);
+
+        write_req_t *wreq = (write_req_t*) malloc(sizeof(write_req_t));
+
+        wreq->buf = uv_buf_init(writeValue, strlen(writeValue) + 1);
+
+        uv_write(&wreq->req, (uv_stream_t *)client_handle, &wreq->buf, 1, write_cb);
+    }
 
     void on_client_connected(uv_connect_t* req, int status){
 
@@ -137,21 +106,27 @@ namespace demo {
 
         fprintf(stdout,"client connected %d \n", status);
 
-        uv_read_start((uv_stream_t*) req->handle, alloc_buffer, echo_read);
+        uv_read_start((uv_stream_t*) req->handle, alloc_buffer, on_read_value);
 
-//        write_req_t *wreq = (write_req_t*) malloc(sizeof(write_req_t));
-//
-//        wreq->buf = uv_buf_init("test\n", 5);
-//
-//        uv_write(&wreq->req, (uv_stream_t *)client_handle, &wreq->buf, 1, write_cb);
+        char* buffer = new char[strlen(writeValue) + 6];
+        int ret = snprintf(buffer, strlen(writeValue)+7, "%ld#%s", pid,writeValue);
+        char * num_string = new char[strlen(buffer)];
+        strcpy(num_string,buffer);
 
-        connected = 1;
+        write_req_t *wreq = (write_req_t*) malloc(sizeof(write_req_t));
+
+        wreq->buf = uv_buf_init(num_string, strlen(num_string) + 1);
+
+        uv_write(&wreq->req, (uv_stream_t *)client_handle, &wreq->buf, 1, write_cb);
+
     }
+
+
 
 
     void wait_for_value(uv_idle_t* handle) {
 
-        if (testValue != NULL){
+        if (returnValue != NULL){
              uv_idle_stop(handle);
         }
 
@@ -182,10 +157,7 @@ namespace demo {
 
             uv_loop_init(ipc_loop);
     //        uv_queue_work(uv_default_loop(),req,connectL,NULL);
-           uv_idle_t idler;
 
-           uv_idle_init(ipc_loop, &idler);
-           uv_idle_start(&idler, wait_for_a_while);
 
            uv_connect_t* req = new uv_connect_t;
 
@@ -206,16 +178,7 @@ namespace demo {
            //ipc_loop = NULL;
         }
 
-    NAN_METHOD(connect){
-
-       connect();
-
-       return;
-    }
-
-
-
-
+    
     NAN_METHOD(stop){
 
         fprintf(stderr, "wtf client \n");
@@ -230,45 +193,51 @@ namespace demo {
 
     }
 
-    NAN_METHOD(write){
+    NAN_METHOD(setPid){
         fprintf(stdout,"attempt to write\n");
         if (info.Length() > 0) {
-            if (info[0]->IsString()) {
-              String::Utf8Value str(info[0]->ToString());
-
-
-              char * buffer = new char[strlen(ToCString(str))];
-
-              strcpy(buffer,ToCString(str));
-
-              write_req_t *req = (write_req_t*) malloc(sizeof(write_req_t));
-
-              req->buf = uv_buf_init(buffer, strlen(buffer)+1);
-
-              fprintf(stdout,"attempt to write :%s, size %lu \n",buffer, sizeof buffer);
-
-              uv_write(&req->req, (uv_stream_t *)client_handle, &req->buf, 1, write_cb);
-
-              return;
+            if (info[0]->IsNumber()) {
+              pid = (long) Local<Number>::Cast(info[0])->NumberValue();
             }
         }
     }
 
-    NAN_METHOD(getValue){
+    NAN_METHOD(send){
 
         fprintf(stdout,"attempt to getValue\n");
 
-        connect();
+        if (info.Length() > 0) {
+            if (info[0]->IsString()) {
 
-        info.GetReturnValue().Set(Nan::New<v8::String>(testValue).ToLocalChecked());
+                  String::Utf8Value str(info[0]->ToString());
+
+                  writeValue = new char[strlen(ToCString(str))];
+
+                  strcpy(writeValue,ToCString(str));
+
+                  fprintf(stdout, "send Sync %s \n", writeValue);
+
+                  connect();
+
+                  info.GetReturnValue().Set(Nan::New<v8::String>(returnValue).ToLocalChecked());
+
+                  delete returnValue;
+
+                  return;
+            }
+        }
+
+        info.GetReturnValue().Set(Nan::Null());
+
+
     }
 
 
     void init(Local<Object> exports) {
       Nan::SetMethod(exports, "stop", stop);
-      Nan::SetMethod(exports, "getValue", getValue);
+      Nan::SetMethod(exports, "send", send);
       //Nan::SetMethod(exports, "connect", connect);
-      Nan::SetMethod(exports, "write", write);
+      Nan::SetMethod(exports, "setPid", setPid);
     }
 
     NODE_MODULE(NODE_GYP_MODULE_NAME, init)

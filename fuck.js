@@ -5,7 +5,7 @@
  */
 
 
-const addon = require('./build/Release/client');
+const addon = require('./lib/child');
 
 console.log("hahaha");
 
@@ -15,8 +15,7 @@ console.log("hahaha");
 
 //console.log("from fuck:" + addon.fuck());
 
-console.log(addon.getValue());
-
+console.log(addon.sendSync("test","yes",1));
 // setTimeout(()=>{
 //     process.exit(0);
 // },20000);

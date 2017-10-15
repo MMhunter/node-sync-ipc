@@ -38,9 +38,20 @@ const test = require("./lib/parent");
 
 let sub = test.fork("./fuck.js");
 
+let i = 0;
+
+let r = {};
+
 sub.onSync("test",function(res){
-    res("hahahashabi");
-})
+
+    r[i] = "";
+    for(let j = 0; j < i ; j ++){
+        r[i] += "1";
+    }
+    i++;
+
+    res(i);
+});
 
 sub.on("exit",()=>{
     console.log("fuck exit");

@@ -2,11 +2,8 @@
 #include <uv.h>
 #include <nan.h>
 #include <string.h>
-#ifdef _WIN32
-char* pipename = "\\\\.\\pipe\\nodePipe";
-#else
-char* pipename = "nodePipe";
-#endif
+
+#define DEBUG 0
 
 
 namespace demo {
@@ -27,11 +24,17 @@ namespace demo {
 
     char * writeValue;
 
+    char * pipename;
+
     uv_pipe_t* client_handle;
 
     uv_loop_t * ipc_loop = NULL;
 
-    long pid;
+    int pid;
+
+    int pid_digits;
+
+    int parent_pid;
 
     typedef struct {
         uv_write_t req;
@@ -55,21 +58,21 @@ namespace demo {
     }
 
 
+
     void on_read_value(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
 
         if (nread > 0) {
-            fprintf(stdout,"Client Read %ld: %s \n",nread,buf->base);
+            if(DEBUG) fprintf(stdout,"Client Read %ld: %s \n",nread,buf->base);
 
-            returnValue = new char[strlen(buf->base)];
-
-            strcpy(returnValue,buf->base);
+            returnValue = new char[nread];
+            returnValue = strdup(buf->base);
             uv_read_stop(client);
             uv_close((uv_handle_t *) client,NULL);
         }
 
         if (nread < 0) {
             if (nread != UV_EOF)
-                fprintf(stderr, "Read error %s\n", uv_err_name(nread));
+                if(DEBUG) fprintf(stderr, "Read error %s\n", uv_err_name(nread));
             uv_close((uv_handle_t*) client, NULL);
         }
 
@@ -79,43 +82,35 @@ namespace demo {
     void write_cb(uv_write_t* req, int status) {
        //uv_close((uv_handle_t *)req, NULL);
        if (status != 0) {
-               fprintf(stderr, "Client Write error %s\n", uv_err_name(status));
+               if(DEBUG) fprintf(stderr, "Client Write error %s\n", uv_err_name(status));
        }
-       else fprintf(stderr, "Client Write success %s\n", uv_err_name(status));
        free_write_req(req);
     }
 
-    void write_value_to_server(uv_write_t* req, int status){
 
-        write_cb(req, status);
-
-        write_req_t *wreq = (write_req_t*) malloc(sizeof(write_req_t));
-
-        wreq->buf = uv_buf_init(writeValue, strlen(writeValue) + 1);
-
-        uv_write(&wreq->req, (uv_stream_t *)client_handle, &wreq->buf, 1, write_cb);
-    }
 
     void on_client_connected(uv_connect_t* req, int status){
 
         if (status != 0) {
             // error!
-            fprintf(stdout,"client connection error %s\n", uv_err_name(status));
+            if(DEBUG) fprintf(stdout,"client connection error %s\n", uv_err_name(status));
             return;
         }
 
-        fprintf(stdout,"client connected %d \n", status);
+        if(DEBUG) fprintf(stdout,"client connected %d \n", status);
 
         uv_read_start((uv_stream_t*) req->handle, alloc_buffer, on_read_value);
 
-        char* buffer = new char[strlen(writeValue) + 6];
-        int ret = snprintf(buffer, strlen(writeValue)+7, "%ld#%s", pid,writeValue);
-        char * num_string = new char[strlen(buffer)];
-        strcpy(num_string,buffer);
+
+        char *buffer = new char[pid_digits+1+strlen(writeValue)];
+        sprintf(buffer,"%d#%s",pid,writeValue);
+        delete writeValue;
+//        strcat(buffer,"#");
+//        strcat(buffer,writeValue);
 
         write_req_t *wreq = (write_req_t*) malloc(sizeof(write_req_t));
 
-        wreq->buf = uv_buf_init(num_string, strlen(num_string) + 1);
+        wreq->buf = uv_buf_init(buffer, strlen(buffer)+1);
 
         uv_write(&wreq->req, (uv_stream_t *)client_handle, &wreq->buf, 1, write_cb);
 
@@ -165,11 +160,13 @@ namespace demo {
 
            uv_pipe_init(ipc_loop, client_handle,0);
 
+
+
            uv_pipe_connect(req, client_handle, pipename, on_client_connected);
 
            uv_run(ipc_loop,UV_RUN_DEFAULT);
 
-           fprintf(stdout,"connect loop successfully closed\n");
+           if(DEBUG) fprintf(stdout,"connect loop successfully closed\n");
 
            uv_loop_close(ipc_loop);
 
@@ -181,11 +178,11 @@ namespace demo {
     
     NAN_METHOD(stop){
 
-        fprintf(stderr, "wtf client \n");
+        if(DEBUG) fprintf(stderr, "wtf client \n");
         uv_shutdown_t* shutdown_req = new uv_shutdown_t;
         int r = uv_shutdown(shutdown_req, (uv_stream_t *) client_handle, NULL);
         if (r != 0) {
-               fprintf(stderr, "shutdown err %s\n", uv_err_name(r));
+               if(DEBUG) fprintf(stderr, "shutdown err %s\n", uv_err_name(r));
         }
         uv_close((uv_handle_t *) client_handle,NULL);
         //exit(0);
@@ -194,34 +191,50 @@ namespace demo {
     }
 
     NAN_METHOD(setPid){
-        fprintf(stdout,"attempt to write\n");
         if (info.Length() > 0) {
             if (info[0]->IsNumber()) {
-              pid = (long) Local<Number>::Cast(info[0])->NumberValue();
+
+                int parent_pid = (int) Local<Number>::Cast(info[0])->NumberValue();
+                int temp = parent_pid;
+                int parent_pid_digits = 0;
+                while(temp>0){
+                   parent_pid_digits += 1;
+                   temp /= 10;
+                }
+                #ifdef _WIN32
+                const char *preset = "\\\\.\\pipe\\nodePipe";
+                #else
+                const char *preset = "nodePipe";
+                #endif
+                pipename = new char[strlen(preset)+parent_pid_digits];
+                sprintf(pipename,"%s%d",preset,parent_pid);
+
             }
         }
     }
 
     NAN_METHOD(send){
 
-        fprintf(stdout,"attempt to getValue\n");
+        //if(DEBUG) fprintf(stdout,"attempt to getValue %d\n",info.Length());
 
         if (info.Length() > 0) {
             if (info[0]->IsString()) {
 
                   String::Utf8Value str(info[0]->ToString());
 
-                  writeValue = new char[strlen(ToCString(str))];
+                  const char* s = ToCString(str);
 
-                  strcpy(writeValue,ToCString(str));
+                  writeValue = strdup(s);
 
-                  fprintf(stdout, "send Sync %s \n", writeValue);
+                  if(DEBUG) fprintf(stdout, "send Sync %s \n", writeValue);
 
                   connect();
 
                   info.GetReturnValue().Set(Nan::New<v8::String>(returnValue).ToLocalChecked());
 
                   delete returnValue;
+
+                  //delete writeValue;
 
                   return;
             }
@@ -232,13 +245,29 @@ namespace demo {
 
     }
 
+    int getpid(){
+        return GetCurrentProcessId();
+    }
 
     void init(Local<Object> exports) {
       Nan::SetMethod(exports, "stop", stop);
-      Nan::SetMethod(exports, "send", send);
+      Nan::SetMethod(exports, "sendSync", send);
       //Nan::SetMethod(exports, "connect", connect);
-      Nan::SetMethod(exports, "setPid", setPid);
+      Nan::SetMethod(exports, "setParentPid", setPid);
+
+        pid = getpid();
+
+        pid_digits = 0;
+
+        int temp = pid;
+
+        while(temp>0){
+           pid_digits += 1;
+           temp /= 10;
+        }
     }
+
+
 
     NODE_MODULE(NODE_GYP_MODULE_NAME, init)
 

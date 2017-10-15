@@ -38,25 +38,19 @@ const test = require("./lib/parent");
 
 let sub = test.fork("./fuck.js");
 
+let sub2 = test.fork("./fuck.js");
+
 let i = 0;
 
-let r = {};
+sub.onSync("test",function(res,v){
 
-sub.onSync("test",function(res){
-
-    r[i] = "";
-    for(let j = 0; j < i ; j ++){
-        r[i] += "1";
-    }
-    i++;
-
+    i+=v;
     res(i);
 });
 
-sub.on("exit",()=>{
-    console.log("fuck exit");
+sub2.onSync("test",function(res,v){
+
+    i+=v;
+    res(i);
 });
 
-setTimeout(()=>{
-    process.exit(0);
-},3000);

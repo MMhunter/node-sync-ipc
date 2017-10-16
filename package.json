@@ -1,8 +1,8 @@
 {
   "name": "node-sync-ipc",
-  "version": "1.0.0",
+  "version": "0.0.5",
   "description": "",
-  "main": "fuck.js",
+  "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "install": "node-gyp rebuild"

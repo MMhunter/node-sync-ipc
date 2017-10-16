@@ -38,7 +38,7 @@ const test = require("./lib/parent");
 
 let sub = test.fork("./fuck.js");
 
-let sub2 = test.fork("./fuck.js");
+// let sub2 = test.fork("./fuck.js");
 
 let i = 0;
 
@@ -48,9 +48,13 @@ sub.onSync("test",function(res,v){
     res(i);
 });
 
-sub2.onSync("test",function(res,v){
+setInterval(()=>{
+    console.log(1);
+},1000);
 
-    i+=v;
-    res(i);
-});
+// sub2.onSync("test",function(res,v){
+//
+//     i+=v;
+//     res(i);
+// });
 

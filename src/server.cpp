@@ -241,7 +241,6 @@ char * getPipename(){
 void createL(){
 
     loop_s = uv_default_loop();
-    uv_loop_init(loop_s);
 
     server_handle = new uv_pipe_t;
     uv_pipe_init(loop_s, server_handle, 0);
@@ -271,6 +270,12 @@ void on_server_closed(uv_handle_t * server){
     if(DEBUG) fprintf(stderr, "stop server3 \n");
     delete server;
     server_handle = NULL;
+
+    #ifdef _WIN32
+    #else
+    uv_fs_t* req = new uv_fs_t;
+    int r = uv_fs_unlink(uv_default_loop(), req, getPipename(), NULL);
+    #endif
 }
 
 

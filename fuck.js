@@ -5,7 +5,7 @@
  */
 
 
-const ipc = require('./index').child;
+const ipc = require('./index').child();
 
 console.log("hahaha");
 

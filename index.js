@@ -4,6 +4,6 @@
  * Created by mmhunter on 16/10/2017.
  */
 module.exports = {
-    parent:require("./lib/parent"),
-    child:require("./lib/child")
-}
+    parent:()=>{ return require("./lib/parent") },
+    child:()=>{ return require("./lib/child")}
+};

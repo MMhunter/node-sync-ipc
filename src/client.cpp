@@ -71,6 +71,7 @@ namespace demo {
             returnValue = strdup(buf->base);
             uv_read_stop(client);
             uv_close((uv_handle_t *) client,on_client_closed);
+            free(buf->base);
         }
 
         if (nread < 0) {
@@ -79,7 +80,6 @@ namespace demo {
             uv_close((uv_handle_t*) client, NULL);
         }
 
-        free(buf->base);
     }
 
     void write_cb(uv_write_t* req, int status) {

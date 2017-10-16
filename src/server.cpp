@@ -188,6 +188,8 @@ void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
             pipe_callback->Call(2, argv);
         }
 
+        free(buf->base);
+
         return;
     }
 
@@ -200,7 +202,7 @@ void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
         if(DEBUG) fprintf(stdout,"clients count after delete %d\n", clients.size());
     }
 
-    free(buf->base);
+
 }
 
 int _getpid(){

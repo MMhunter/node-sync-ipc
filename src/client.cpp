@@ -2,8 +2,7 @@
 #include <uv.h>
 #include <nan.h>
 #include <string.h>
-
-#define DEBUG 1
+#include "basic.h"
 
 
 namespace demo {

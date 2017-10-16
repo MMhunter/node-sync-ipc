@@ -34,7 +34,7 @@
 //
 // console.log(process.pid);
 
-const test = require("./lib/parent");
+const test = require("./index").parent;
 
 let sub = test.fork("./fuck.js");
 

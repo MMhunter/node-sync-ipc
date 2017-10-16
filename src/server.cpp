@@ -2,8 +2,8 @@
 #include <uv.h>
 #include <nan.h>
 #include <vector>
+#include "basic.h"
 
-#define DEBUG 1
 
 namespace server {
 

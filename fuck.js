@@ -17,6 +17,6 @@ console.log("hahaha");
 
 
 
-for(let i = 0; i <10 ; i++){
-    console.log("get "+i+" from parent:"+ipc.sendSync("test",i));
-}
+setInterval(()=>{
+    console.log(ipc.sendSync("test"));
+},1);

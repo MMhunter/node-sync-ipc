@@ -191,13 +191,16 @@ namespace demo {
 
                   connect();
 
-                  info.GetReturnValue().Set(Nan::New<v8::String>(returnValue).ToLocalChecked());
+                  if(returnValue != NULL){
+                    info.GetReturnValue().Set(Nan::New<v8::String>(returnValue).ToLocalChecked());
+                    delete returnValue;
 
-                  delete returnValue;
-
+                    returnValue = NULL;
+                    return;
+                  }
                   //delete writeValue;
 
-                  return;
+
             }
         }
 

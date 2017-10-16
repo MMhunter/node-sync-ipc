@@ -44,13 +44,9 @@ let i = 0;
 
 sub.onSync("test",function(res,v){
 
-    i+=v;
+    i+=1;
     res(i);
 });
-
-setInterval(()=>{
-    console.log(1);
-},1000);
 
 // sub2.onSync("test",function(res,v){
 //

@@ -30,6 +30,46 @@ std::vector<client *> clients;
 
 Nan::Callback* pipe_callback = new Nan::Callback();
 
+int _getpid(){
+    #ifdef _WIN32
+    return GetCurrentProcessId();
+    #else
+    return getpid();
+    #endif
+}
+
+
+char * getPipename(){
+
+    char * pipename;
+
+    int pid = _getpid();
+
+    int pid_digits = 0;
+
+    int temp = pid;
+
+    while(temp>0){
+       pid_digits += 1;
+       temp /= 10;
+    }
+    #ifdef _WIN32
+    const char* pipename_preset = "\\\\.\\pipe\\nodePipe";
+    pipename = (char *) malloc(sizeof(char) * (strlen(pipename_preset)+pid_digits+1));
+    sprintf(pipename,"%s%d",pipename_preset,pid);
+    #else
+    const char *homedir;
+    if ((homedir = getenv("HOME")) == NULL) {
+        homedir = getpwuid(getuid())->pw_dir;
+    }
+    const char* pipename_preset = "nodePipe";
+    pipename = (char *) malloc(sizeof(char) * (strlen(pipename_preset)+pid_digits+strlen(homedir)+7));
+    sprintf(pipename,"/%s/%s%d.sock",homedir,pipename_preset,pid);
+    #endif
+
+    return pipename;
+}
+
 
 void add_client(int pid, uv_pipe_t* client_handle){
 
@@ -149,14 +189,22 @@ void getPidAndMessage(char* raw, int * pid, char ** message){
 
 }
 
+void on_server_closed(uv_handle_t * server){
+    if(DEBUG) fprintf(stderr, "stop server3 \n");
+    free(server);
+    server_handle = NULL;
+
+
+}
+
 void on_client_closed(uv_handle_t * client){
     free(client);
+//    if(clients.size() == 0){
+//        uv_close((uv_handle_t *) server_handle,on_server_closed);
+//    }
 }
 
 void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
-
-
-
 
 
     if (nread > 0) {
@@ -207,40 +255,7 @@ void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
     free(buf->base);
 }
 
-int _getpid(){
-    #ifdef _WIN32
-    return GetCurrentProcessId();
-    #else
-    return getpid();
-    #endif
-}
 
-
-char * getPipename(){
-
-    char * pipename;
-
-    int pid = _getpid();
-
-    int pid_digits = 0;
-
-    int temp = pid;
-
-    while(temp>0){
-       pid_digits += 1;
-       temp /= 10;
-    }
-    #ifdef _WIN32
-    const char* pipename_preset = "\\\\.\\pipe\\nodePipe";
-    #else
-    const char* pipename_preset = "nodePipe";
-    #endif
-
-    pipename = (char *) malloc(sizeof(char) * (strlen(pipename_preset)+pid_digits+1));
-    sprintf(pipename,"%s%d",pipename_preset,pid);
-
-    return pipename;
-}
 
 void createL(){
 
@@ -270,17 +285,7 @@ void write_cb(uv_write_t* req, int status) {
 }
 
 
-void on_server_closed(uv_handle_t * server){
-    if(DEBUG) fprintf(stderr, "stop server3 \n");
-    free(server);
-    server_handle = NULL;
 
-    #ifdef _WIN32
-    #else
-    uv_fs_t* req = (uv_fs_t *) malloc(sizeof(uv_fs_t));
-    int r = uv_fs_unlink(uv_default_loop(), req, getPipename(), (uv_fs_cb) free);
-    #endif
-}
 
 
 void stop_server(){
@@ -290,12 +295,19 @@ void stop_server(){
     //uv_close((uv_handle_t *) server_handle, stop_loop);
 //    if(DEBUG) fprintf(stderr, "delete file \n");
 
-
     if(server_handle != NULL && uv_is_active((uv_handle_t *) server_handle)){
 
         if(DEBUG) fprintf(stderr, "stop server2 \n");
-        fprintf(stderr,"server pending count %d",uv_pipe_pending_count(server_handle));
+        if(DEBUG) fprintf(stderr,"server pending count %d",uv_pipe_pending_count(server_handle));
 
+        #ifdef _WIN32
+        #else
+        uv_fs_t* req = (uv_fs_t *) malloc(sizeof(uv_fs_t));
+        int r = uv_fs_unlink(uv_default_loop(), req, getPipename(), (uv_fs_cb) free);
+        if(r != 0){
+            if(DEBUG) fprintf(stderr, "delete sock error %s\n", uv_err_name(r));
+        }
+        #endif
 
         if(clients.size() > 0){
             for(std::vector<client *>::iterator it=clients.begin(); it!=clients.end(); ){

@@ -175,12 +175,18 @@ namespace demo {
                    temp /= 10;
                 }
                 #ifdef _WIN32
-                const char *preset = "\\\\.\\pipe\\nodePipe";
+                const char* pipename_preset = "\\\\.\\pipe\\nodePipe";
+                pipename = (char *) malloc(sizeof(char) * (strlen(pipename_preset)+parent_pid_digits+1));
+                sprintf(pipename,"%s%d",pipename_preset,parent_pid);
                 #else
-                const char *preset = "nodePipe";
+                const char *homedir;
+                if ((homedir = getenv("HOME")) == NULL) {
+                    homedir = getpwuid(getuid())->pw_dir;
+                }
+                const char* pipename_preset = "nodePipe";
+                pipename = (char *) malloc(sizeof(char) * (strlen(pipename_preset)+parent_pid_digits+strlen(homedir)+7));
+                sprintf(pipename,"/%s/%s%d.sock",homedir,pipename_preset,parent_pid);
                 #endif
-                pipename = (char *) malloc(sizeof(char)*(strlen(preset)+parent_pid_digits+1));
-                sprintf(pipename,"%s%d",preset,parent_pid);
 
             }
         }

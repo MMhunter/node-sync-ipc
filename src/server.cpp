@@ -191,6 +191,13 @@ namespace server {
         free(client);
     }
 
+    void on_client_closed_when_stop(uv_handle_t * client){
+        free(client);
+        if(clients.size() == 0){
+            uv_close((uv_handle_t *) server_handle,on_server_closed);
+        }
+    }
+
     void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
 
 
@@ -291,14 +298,13 @@ namespace server {
 
             if(clients.size() > 0){
                 for(std::vector<client *>::iterator it=clients.begin(); it!=clients.end(); ){
-                    uv_close((uv_handle_t *) (*it)->client_handle, on_client_closed);
+                    uv_close((uv_handle_t *) (*it)->client_handle, on_client_closed_when_stop);
                     it = clients.erase(it);
                 }
             }
             else{
                 uv_close((uv_handle_t *) server_handle,on_server_closed);
             }
-
 
         }
     }

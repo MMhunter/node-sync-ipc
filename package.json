@@ -23,6 +23,7 @@
     "child_process",
     "sync",
     "synchronous",
-    "ipc"
+    "ipc",
+    "message"
   ]
 }

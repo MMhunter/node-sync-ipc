@@ -51,16 +51,16 @@ console.log(syncIpc.sendSync("foo","echo content"));
 
 # Attention
 
-## data type
+## JSON format
 
-The data to be transferred will be serialized and deserialized in the format of JSON. Error will be thrown if data is not serializable using `JSON.stringify`.
+Data to be transferred will be serialized and deserialized in the format of JSON. Error will be thrown if data is not serializable by `JSON.stringify`.
 
 Also class information will be lost during the communication.
 
 
 ## Sock file
 
-This module is implemented with uv_pipe_t in libuv to create channel. On Unix based system, this module would create a nodePipe{parentPid}.sock in the home directory (or defined by the HOME environment variable). In most cases this file would be deleted when all child process exits or the parent process exits. But currently it is not guaranteed to be deleted if process was killed unexpectedly.
+This module is implemented with uv_pipe_t in libuv to create channel. On Unix based system, this module would create a nodePipe{parentPid}.sock in the home directory (or defined by the HOME environment variable). In most cases this file would be deleted correctly. But currently it is not guaranteed if process was killed unexpectedly.
 
 
 # Copyright

@@ -1,7 +1,7 @@
 {
   "name": "node-sync-ipc",
-  "version": "0.1.0",
-  "description": "",
+  "version": "0.1.1",
+  "description": "synchronous communication between parent and child processes",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -12,5 +12,17 @@
   "gypfile": true,
   "dependencies": {
     "nan": "^2.7.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mmhunter/node-sync-ipc"
+  },
+  "bugs": "https://github.com/mmhunter/node-sync-ipc/issues",
+  "homepage": "https://github.com/mmhunter/node-sync-ipc",
+  "keywords": [
+    "child_process",
+    "sync",
+    "synchronous",
+    "ipc"
+  ]
 }

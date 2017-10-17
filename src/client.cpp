@@ -65,13 +65,16 @@ namespace demo {
     void on_read_value(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
 
         if (nread > 0) {
-            if(DEBUG) fprintf(stdout,"Client Read %ld: %s \n",nread,buf->base);
 
             returnValue = new char[nread];
-            returnValue = strdup(buf->base);
+            memcpy(returnValue,buf->base,nread);
+            returnValue[nread] = 0;
+
+            if(DEBUG) fprintf(stdout,"Client Read %ld: %s \n",nread,returnValue);
+
             uv_read_stop(client);
             uv_close((uv_handle_t *) client,on_client_closed);
-            free(buf->base);
+
         }
 
         if (nread < 0) {
@@ -80,6 +83,7 @@ namespace demo {
             uv_close((uv_handle_t*) client, NULL);
         }
 
+        free(buf->base);
     }
 
     void write_cb(uv_write_t* req, int status) {
@@ -105,7 +109,7 @@ namespace demo {
         uv_read_start((uv_stream_t*) req->handle, alloc_buffer, on_read_value);
 
 
-        char *buffer = new char[pid_digits+1+strlen(writeValue)+1];
+        char *buffer = new char[pid_digits+1+strlen(writeValue)];
         sprintf(buffer,"%d#%s",pid,writeValue);
         buffer[pid_digits+1+strlen(writeValue)] = 0;
         delete writeValue;
@@ -114,7 +118,7 @@ namespace demo {
 
         write_req_t *wreq = (write_req_t*) malloc(sizeof(write_req_t));
 
-        wreq->buf = uv_buf_init(buffer, strlen(buffer)+2);
+        wreq->buf = uv_buf_init(buffer, strlen(buffer));
 
         uv_write(&wreq->req, (uv_stream_t *)client_handle, &wreq->buf, 1, write_cb);
 
@@ -217,10 +221,10 @@ namespace demo {
         #endif
     }
 
-    void init(Local<Object> exports) {
-      Nan::SetMethod(exports, "sendSync", send);
+    NAN_MODULE_INIT(init) {
+      Nan::SetMethod(target, "sendSync", send);
       //Nan::SetMethod(exports, "connect", connect);
-      Nan::SetMethod(exports, "setParentPid", setPid);
+      Nan::SetMethod(target, "setParentPid", setPid);
 
         pid = _getpid();
 

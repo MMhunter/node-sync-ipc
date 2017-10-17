@@ -24,3 +24,4 @@ console.log("hahaha");
 while (true){
     console.log(ipc.sendSync("test"));
 }
+

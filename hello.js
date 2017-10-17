@@ -48,9 +48,16 @@ sub.onSync("test",function(res,v){
     res(i);
 });
 
+setTimeout(()=>{
+    sub.kill();
+},2000);
+
 // sub2.onSync("test",function(res,v){
 //
 //     i+=v;
 //     res(i);
 // });
 
+setInterval(()=>{
+    console.log(232);
+},1000);

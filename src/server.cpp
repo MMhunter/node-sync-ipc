@@ -163,14 +163,17 @@ void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
 //            free(buf->base);
 //            return;
 //        }
-        if(DEBUG) fprintf(stdout,"Server Read %ld: %s \n",nread,buf->base);
+        char * buffer = new char[nread];
+        memcpy(buffer,buf->base,nread);
+        buffer[nread] = 0;
+        if(DEBUG) fprintf(stdout,"Server Read %ld: %s \n",nread,buffer);
 //        write_req_t *req = (write_req_t*) malloc(sizeof(write_req_t));
 //        req->buf = uv_buf_init(buf->base, nread);
 //        uv_write(&req->req, client, &req->buf, 1, echo_write);
         int pid;
         char * message;
 
-        getPidAndMessage(buf->base,&pid,&message);
+        getPidAndMessage(buffer,&pid,&message);
         if(get_client((uv_pipe_t *) client) == NULL){
             add_client(pid ,(uv_pipe_t *) client);
             if(DEBUG) fprintf(stdout,"clients count %d\n", clients.size());
@@ -188,10 +191,10 @@ void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
             pipe_callback->Call(2, argv);
         }
 
-        return;
+        free(buffer);
     }
 
-    if (nread < 0) {
+    else if (nread < 0) {
         if(DEBUG) fprintf(stderr, "Server Read error %s\n", uv_err_name(nread));
         if (nread != UV_EOF)
             if(DEBUG) fprintf(stderr, "Server Read error %s\n", uv_err_name(nread));
@@ -290,12 +293,19 @@ void stop_server(){
     if(server_handle != NULL && uv_is_active((uv_handle_t *) server_handle)){
 
         if(DEBUG) fprintf(stderr, "stop server2 \n");
-        uv_close((uv_handle_t *) server_handle,on_server_closed);
+        fprintf(stderr,"server pending count %d",uv_pipe_pending_count(server_handle));
 
-        for(std::vector<client *>::iterator it=clients.begin(); it!=clients.end(); ){
-            uv_close((uv_handle_t *) (*it)->client_handle, on_client_closed);
-            it = clients.erase(it);
+
+        if(clients.size() > 0){
+            for(std::vector<client *>::iterator it=clients.begin(); it!=clients.end(); ){
+                uv_close((uv_handle_t *) (*it)->client_handle, on_client_closed);
+                it = clients.erase(it);
+            }
         }
+        else{
+            uv_close((uv_handle_t *) server_handle,on_server_closed);
+        }
+
 
     }
 }
@@ -326,7 +336,7 @@ NAN_METHOD(write){
 
           write_req_t *req = (write_req_t*) malloc(sizeof(write_req_t));
 
-          req->buf = uv_buf_init(buffer, strlen(buffer)+1);
+          req->buf = uv_buf_init(buffer, strlen(buffer));
 
           int pid = (int) Local<Number>::Cast(info[0])->NumberValue();
 

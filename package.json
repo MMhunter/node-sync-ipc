@@ -8,7 +8,7 @@
     "install": "node-gyp rebuild"
   },
   "author": "mmhunter <mmhunter@mmhunter.com> (http://mmhunter.com)",
-  "license": "ISC",
+  "license": "MIT",
   "gypfile": true,
   "dependencies": {
     "nan": "^2.7.0"

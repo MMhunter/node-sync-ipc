@@ -5,7 +5,7 @@
 #include "basic.h"
 
 
-namespace demo {
+namespace client {
 
     using v8::FunctionCallbackInfo;
     using v8::Isolate;
@@ -14,10 +14,6 @@ namespace demo {
     using v8::String;
     using v8::Value;
     using v8::Number;
-
-    int test = 0;
-
-    int connected = 1;
 
     char * returnValue;
 
@@ -87,22 +83,17 @@ namespace demo {
     }
 
     void write_cb(uv_write_t* req, int status) {
-       //uv_close((uv_handle_t *)req, NULL);
        if (status != 0) {
                if(DEBUG) fprintf(stderr, "Client Write error %s\n", uv_err_name(status));
        }
        free_write_req(req);
     }
 
-
-
     void on_client_connected(uv_connect_t* req, int status){
 
         if (status != 0) {
             // error!
             if(DEBUG) fprintf(stdout,"client connection error %s\n", uv_err_name(status));
-
-
 
         }
 
@@ -136,11 +127,9 @@ namespace demo {
 
     void connect(){
 
-            ipc_loop = (uv_loop_t *) malloc(sizeof(uv_loop_t));
+           ipc_loop = (uv_loop_t *) malloc(sizeof(uv_loop_t));
 
-            uv_loop_init(ipc_loop);
-    //        uv_queue_work(uv_default_loop(),req,connectL,NULL);
-
+           uv_loop_init(ipc_loop);
 
            uv_connect_t* req = (uv_connect_t *) malloc(sizeof(uv_connect_t));
 
@@ -158,9 +147,8 @@ namespace demo {
 
            uv_loop_close(ipc_loop);
 
-           //delete ipc_loop;
+           free(ipc_loop);
 
-           //ipc_loop = NULL;
         }
 
     NAN_METHOD(setPid){
@@ -194,9 +182,8 @@ namespace demo {
 
     NAN_METHOD(send){
 
-        //if(DEBUG) fprintf(stdout,"attempt to getValue %d\n",info.Length());
-
         if (info.Length() > 0) {
+
             if (info[0]->IsString()) {
 
                   String::Utf8Value str(info[0]->ToString());
@@ -216,7 +203,6 @@ namespace demo {
                     returnValue = NULL;
                     return;
                   }
-                  //delete writeValue;
                   else{
                     Nan::ThrowError("Failed To Send Sync");
                   }
@@ -239,7 +225,6 @@ namespace demo {
 
     NAN_MODULE_INIT(init) {
       Nan::SetMethod(target, "sendSync", send);
-      //Nan::SetMethod(exports, "connect", connect);
       Nan::SetMethod(target, "setParentPid", setPid);
 
         pid = _getpid();
@@ -254,13 +239,11 @@ namespace demo {
         }
     }
 
-
-
     NODE_MODULE(NODE_GYP_MODULE_NAME, init)
 
 
 
-}  // namespace demo
+}
 
 
 

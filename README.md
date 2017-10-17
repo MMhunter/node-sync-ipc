@@ -1,6 +1,6 @@
 # node-sync-ipc
 
-`node-sync-ipc` is a tiny library for synchronous communication between parent and asynchronously forked child node processes. It can block the child process until the parent make a response. This use case is kind of rare but hope it can be some help if anyone needs.
+`node-sync-ipc` is a tiny library making it possible for child node.js processes created by `child_process.fork` to send synchronous message to parent process. It can block the child process until the parent make a response. This use case is kind of rare but I hope it can be of some help if anyone needs.
 
 # Install
 
@@ -29,8 +29,8 @@ child.onSync("foo",function(res,bar){
 
     bar = bar + " " +bar;
     // block the child process for one second
-    // the first argument will be passed to child process as the result
     setTimeout(function(){
+        // the first argument will be passed to child process as the result
         res(bar);
     },1000)
 });
@@ -40,6 +40,8 @@ child.onSync("foo",function(res,bar){
 In child process:
 
 ````javascript
+
+// child.js
 
 var syncIpc = require("node-sync-ipc").child();
 
@@ -51,7 +53,7 @@ console.log(syncIpc.sendSync("foo","echo content"));
 
 # Attention
 
-## JSON format
+## Data should be serializable
 
 Data to be transferred will be serialized and deserialized in the format of JSON. Error will be thrown if data is not serializable by `JSON.stringify`.
 
@@ -60,8 +62,12 @@ Also class information will be lost during the communication.
 
 ## Sock file
 
-This module is implemented with uv_pipe_t in libuv to create channel. On Unix based system, this module would create a nodePipe{parentPid}.sock in the home directory (or defined by the HOME environment variable). In most cases this file would be deleted correctly. But currently it is not guaranteed if process was killed unexpectedly.
+On Unix based system, this module would create a `nodePipe${parentPid}.sock` in the home directory (or defined by the HOME environment variable). In most cases this file would be deleted correctly. But currently it is not guaranteed if process was killed unexpectedly.
 
+
+## Electron
+
+This module has c++ add-ons, so you have to rebuild it to use it in Electron.
 
 # Copyright
 

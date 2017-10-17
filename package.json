@@ -1,6 +1,6 @@
 {
   "name": "node-sync-ipc",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "synchronous communication between parent and child processes",
   "main": "index.js",
   "scripts": {

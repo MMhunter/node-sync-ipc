@@ -17,6 +17,10 @@ console.log("hahaha");
 
 
 
-setInterval(()=>{
+// setInterval(()=>{
+//     console.log(ipc.sendSync("test"));
+// },1);
+
+while (true){
     console.log(ipc.sendSync("test"));
-},1);
+}

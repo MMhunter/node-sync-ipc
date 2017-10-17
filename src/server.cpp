@@ -33,7 +33,7 @@ Nan::Callback* pipe_callback = new Nan::Callback();
 
 void add_client(int pid, uv_pipe_t* client_handle){
 
-    client * c = new client;
+    client * c = (client *) malloc(sizeof(client));
 
     c->client_handle = client_handle;
     c->pid = pid;
@@ -135,21 +135,22 @@ void getPidAndMessage(char* raw, int * pid, char ** message){
         return;
     }
 
-    char * pidSub = new char[i];
+    char * pidSub = (char *) malloc(sizeof(char) * (i+1));
     memcpy( pidSub,raw, i );
     pidSub[i] = '\0';
     *pid = atoi(pidSub);
+    free(pidSub);
 
 
 
-    *message = new char[strlen(raw)-i-1];
+    *message = (char *) malloc(sizeof(char) * (strlen(raw)-i));
     memcpy(*message,raw+i+1,strlen(raw)-i-1);
     (*message)[strlen(raw)-i-1] = '\0';
 
 }
 
 void on_client_closed(uv_handle_t * client){
-    delete client;
+    free(client);
 }
 
 void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
@@ -159,17 +160,12 @@ void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
 
 
     if (nread > 0) {
-//        if(buf->base[0] == ' '){
-//            free(buf->base);
-//            return;
-//        }
-        char * buffer = new char[nread];
+
+        char * buffer = (char *) malloc(nread+1);
         memcpy(buffer,buf->base,nread);
         buffer[nread] = 0;
         if(DEBUG) fprintf(stdout,"Server Read %ld: %s \n",nread,buffer);
-//        write_req_t *req = (write_req_t*) malloc(sizeof(write_req_t));
-//        req->buf = uv_buf_init(buf->base, nread);
-//        uv_write(&req->req, client, &req->buf, 1, echo_write);
+
         int pid;
         char * message;
 
@@ -188,8 +184,13 @@ void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
 
             argv[1] = Nan::New(message).ToLocalChecked();
 
+            if(DEBUG) fprintf(stdout,"callback %s\n",message);
+
             pipe_callback->Call(2, argv);
+
         }
+
+        free(message);
 
         free(buffer);
     }
@@ -235,7 +236,7 @@ char * getPipename(){
     const char* pipename_preset = "nodePipe";
     #endif
 
-    pipename = new char[strlen(pipename_preset)+pid_digits];
+    pipename = (char *) malloc(sizeof(char) * (strlen(pipename_preset)+pid_digits+1));
     sprintf(pipename,"%s%d",pipename_preset,pid);
 
     return pipename;
@@ -245,7 +246,7 @@ void createL(){
 
     loop_s = uv_default_loop();
 
-    server_handle = new uv_pipe_t;
+    server_handle = (uv_pipe_t *) malloc(sizeof(uv_pipe_t));
     uv_pipe_init(loop_s, server_handle, 0);
 
     int r;
@@ -271,13 +272,13 @@ void write_cb(uv_write_t* req, int status) {
 
 void on_server_closed(uv_handle_t * server){
     if(DEBUG) fprintf(stderr, "stop server3 \n");
-    delete server;
+    free(server);
     server_handle = NULL;
 
     #ifdef _WIN32
     #else
-    uv_fs_t* req = new uv_fs_t;
-    int r = uv_fs_unlink(uv_default_loop(), req, getPipename(), NULL);
+    uv_fs_t* req = (uv_fs_t *) malloc(sizeof(uv_fs_t));
+    int r = uv_fs_unlink(uv_default_loop(), req, getPipename(), (uv_fs_cb) free);
     #endif
 }
 
@@ -387,7 +388,7 @@ void on_new_connection(uv_stream_t *server, int status) {
         return;
     }
     if(DEBUG) fprintf(stderr,"connected %d \n", status);
-    uv_pipe_t* client = new uv_pipe_t;
+    uv_pipe_t* client = (uv_pipe_t *) malloc(sizeof(uv_pipe_t));
     uv_pipe_init(loop_s,client,0);
     if (uv_accept(server, (uv_stream_t*) client) == 0) {
         if(DEBUG) fprintf(stderr,"accepted \n");

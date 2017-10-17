@@ -58,7 +58,7 @@ namespace demo {
 
     void on_client_closed(uv_handle_t * client){
 
-        delete client;
+        free(client);
     }
 
 
@@ -66,7 +66,7 @@ namespace demo {
 
         if (nread > 0) {
 
-            returnValue = new char[nread];
+            returnValue = (char *) malloc(nread+1);
             memcpy(returnValue,buf->base,nread);
             returnValue[nread] = 0;
 
@@ -80,7 +80,7 @@ namespace demo {
         if (nread < 0) {
             if (nread != UV_EOF)
                 if(DEBUG) fprintf(stderr, "Read error %s\n", uv_err_name(nread));
-            uv_close((uv_handle_t*) client, NULL);
+            uv_close((uv_handle_t*) client, on_client_closed);
         }
 
         free(buf->base);
@@ -101,42 +101,50 @@ namespace demo {
         if (status != 0) {
             // error!
             if(DEBUG) fprintf(stdout,"client connection error %s\n", uv_err_name(status));
-            return;
+
+
+
         }
 
-        if(DEBUG) fprintf(stdout,"client connected %d \n", status);
+        else{
 
-        uv_read_start((uv_stream_t*) req->handle, alloc_buffer, on_read_value);
+            if(DEBUG) fprintf(stdout,"client connected %d \n", status);
+
+            uv_read_start((uv_stream_t*) req->handle, alloc_buffer, on_read_value);
 
 
-        char *buffer = new char[pid_digits+1+strlen(writeValue)];
-        sprintf(buffer,"%d#%s",pid,writeValue);
-        buffer[pid_digits+1+strlen(writeValue)] = 0;
-        delete writeValue;
+            char *buffer = (char *) malloc(sizeof(char)*(pid_digits+1+strlen(writeValue)+1));
+            sprintf(buffer,"%d#%s",pid,writeValue);
+            buffer[pid_digits+1+strlen(writeValue)] = 0;
 
-        if(DEBUG) fprintf(stdout,"client write %s \n", buffer);
 
-        write_req_t *wreq = (write_req_t*) malloc(sizeof(write_req_t));
+            if(DEBUG) fprintf(stdout,"client write %s \n", buffer);
 
-        wreq->buf = uv_buf_init(buffer, strlen(buffer));
+            write_req_t *wreq = (write_req_t*) malloc(sizeof(write_req_t));
 
-        uv_write(&wreq->req, (uv_stream_t *)client_handle, &wreq->buf, 1, write_cb);
+            wreq->buf = uv_buf_init(buffer, strlen(buffer));
 
-        delete req;
+            uv_write(&wreq->req, (uv_stream_t *)client_handle, &wreq->buf, 1, write_cb);
+
+        }
+
+        free(writeValue);
+
+        free(req);
 
     }
 
     void connect(){
 
-            ipc_loop = new uv_loop_t;
+            ipc_loop = (uv_loop_t *) malloc(sizeof(uv_loop_t));
 
             uv_loop_init(ipc_loop);
     //        uv_queue_work(uv_default_loop(),req,connectL,NULL);
 
 
-           uv_connect_t* req = new uv_connect_t;
+           uv_connect_t* req = (uv_connect_t *) malloc(sizeof(uv_connect_t));
 
-           client_handle = new uv_pipe_t;
+           client_handle = (uv_pipe_t *) malloc(sizeof(uv_pipe_t));
 
            uv_pipe_init(ipc_loop, client_handle,0);
 
@@ -171,7 +179,7 @@ namespace demo {
                 #else
                 const char *preset = "nodePipe";
                 #endif
-                pipename = new char[strlen(preset)+parent_pid_digits];
+                pipename = (char *) malloc(sizeof(char)*(strlen(preset)+parent_pid_digits+1));
                 sprintf(pipename,"%s%d",preset,parent_pid);
 
             }
@@ -197,13 +205,15 @@ namespace demo {
 
                   if(returnValue != NULL){
                     info.GetReturnValue().Set(Nan::New<v8::String>(returnValue).ToLocalChecked());
-                    delete returnValue;
+                    free(returnValue);
 
                     returnValue = NULL;
                     return;
                   }
                   //delete writeValue;
-
+                  else{
+                    Nan::ThrowError("Failed To Send Sync");
+                  }
 
             }
         }

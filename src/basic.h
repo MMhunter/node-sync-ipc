@@ -1,5 +1,6 @@
 
-#define DEBUG 0
+#define DEBUG 1
+#define MAX_BUFFER_LENGTH 2000
 #ifdef _WIN32
 #else
 #include <unistd.h>

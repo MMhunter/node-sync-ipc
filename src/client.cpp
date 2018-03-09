@@ -4,7 +4,6 @@
 #include <string.h>
 #include "basic.h"
 
-
 namespace client {
 
     using v8::FunctionCallbackInfo;
@@ -21,6 +20,8 @@ namespace client {
 
     char * pipename;
 
+    int readFullLen;
+
     uv_pipe_t* client_handle;
 
     uv_loop_t * ipc_loop = NULL;
@@ -30,6 +31,22 @@ namespace client {
     int pid_digits;
 
     int parent_pid;
+
+    int writingOffset = 0;
+
+    void write();
+
+    int getIntDigits(int num){
+
+        int digits = 0;
+
+        while(num>0){
+           digits += 1;
+           num /= 10;
+        }
+
+        return digits;
+    }
 
     typedef struct {
         uv_write_t req;
@@ -57,20 +74,70 @@ namespace client {
         free(client);
     }
 
+    void getPidAndMessage(char* raw, int * pid, char ** message){
+
+
+            int count = strlen(raw);
+            int i = 0;
+            while(raw[i] != '#' && raw[i]){
+                i++;
+                if(i >= count){
+                    break;
+                }
+            }
+
+            if(i >= count){
+                return;
+            }
+
+            char * pidSub = (char *) malloc(sizeof(char) * (i+1));
+            memcpy( pidSub,raw, i );
+            pidSub[i] = '\0';
+            *pid = atoi(pidSub);
+            free(pidSub);
+
+            *message = (char *) malloc(sizeof(char) * (strlen(raw)-i));
+            memcpy(*message,raw+i+1,strlen(raw)-i-1);
+            (*message)[strlen(raw)-i-1] = '\0';
+
+    }
 
     void on_read_value(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
 
         if (nread > 0) {
 
-            returnValue = (char *) malloc(nread+1);
-            memcpy(returnValue,buf->base,nread);
-            returnValue[nread] = 0;
+            char * buffer = (char *) malloc(nread+1);
+            memcpy(buffer,buf->base,nread);
+            buffer[nread] = 0;
 
-            if(DEBUG) fprintf(stdout,"Client Read %ld: %s \n",nread,returnValue);
+            if(DEBUG) fprintf(stdout,"Client Read %ld: %s \n",nread,buffer);
 
-            uv_read_stop(client);
-            uv_close((uv_handle_t *) client,on_client_closed);
+            char *body;
 
+            if(returnValue == NULL){
+                getPidAndMessage(buffer,&readFullLen,&body);
+                returnValue = (char *) malloc(readFullLen+1);
+                for(int i = 0; i <  readFullLen + 1; i++){
+                    returnValue[i] = 0;
+                }
+                free(buffer);
+            }
+            else{
+                body = buffer;
+            }
+
+            strcat(returnValue, body);
+
+            free(body);
+
+            if(DEBUG) fprintf(stdout,"client received %d / %d \n", strlen(returnValue), readFullLen);
+
+            if(strlen(returnValue) == readFullLen){
+                if(DEBUG) fprintf(stdout,"Client Read Finished %ld: %s \n",nread,returnValue);
+
+                uv_read_stop(client);
+                uv_close((uv_handle_t *) client,on_client_closed);
+            }
         }
 
         if (nread < 0) {
@@ -83,10 +150,55 @@ namespace client {
     }
 
     void write_cb(uv_write_t* req, int status) {
+
        if (status != 0) {
                if(DEBUG) fprintf(stderr, "Client Write error %s\n", uv_err_name(status));
        }
        free_write_req(req);
+
+
+       int fullLength = strlen(writeValue);
+
+
+       if(writingOffset < fullLength){
+            write();
+       }
+       else{
+            free(writeValue);
+        }
+    }
+
+    void write(){
+        int fullLength = strlen(writeValue);
+        int finished = 0;
+        if( fullLength-writingOffset <= MAX_BUFFER_LENGTH){
+            finished = 1;
+        }
+        int len = (finished)? fullLength-writingOffset : MAX_BUFFER_LENGTH;
+
+
+        char *buffer;
+        if(writingOffset == 0){
+             int lenDigits = getIntDigits(fullLength);
+             buffer = (char *) malloc(sizeof(char)*(pid_digits+1+lenDigits+1+len+1));
+             sprintf(buffer,"%d#%d#",pid,fullLength);
+             memcpy(buffer+pid_digits+1+lenDigits+1,writeValue+writingOffset,len);
+             buffer[pid_digits+1+lenDigits+1+len] = 0;
+        }
+        else{
+            buffer = (char *) malloc(sizeof(char)*(len+1));
+            memcpy(buffer,writeValue+writingOffset,len);
+            buffer[len] = 0;
+        }
+        writingOffset += len;
+
+        if(DEBUG) fprintf(stdout,"client write %s \n", buffer);
+
+        write_req_t *wreq = (write_req_t*) malloc(sizeof(write_req_t));
+
+        wreq->buf = uv_buf_init(buffer, strlen(buffer));
+
+        uv_write(&wreq->req, (uv_stream_t *)client_handle, &wreq->buf, 1, write_cb);
     }
 
     void on_client_connected(uv_connect_t* req, int status){
@@ -101,25 +213,16 @@ namespace client {
 
             if(DEBUG) fprintf(stdout,"client connected %d \n", status);
 
+            returnValue = NULL;
+
             uv_read_start((uv_stream_t*) req->handle, alloc_buffer, on_read_value);
 
+            writingOffset = 0;
 
-            char *buffer = (char *) malloc(sizeof(char)*(pid_digits+1+strlen(writeValue)+1));
-            sprintf(buffer,"%d#%s",pid,writeValue);
-            buffer[pid_digits+1+strlen(writeValue)] = 0;
-
-
-            if(DEBUG) fprintf(stdout,"client write %s \n", buffer);
-
-            write_req_t *wreq = (write_req_t*) malloc(sizeof(write_req_t));
-
-            wreq->buf = uv_buf_init(buffer, strlen(buffer));
-
-            uv_write(&wreq->req, (uv_stream_t *)client_handle, &wreq->buf, 1, write_cb);
+            write();
 
         }
 
-        free(writeValue);
 
         free(req);
 
@@ -192,7 +295,7 @@ namespace client {
 
                   writeValue = strdup(s);
 
-                  if(DEBUG) fprintf(stdout, "send Sync %s \n", writeValue);
+                  if(DEBUG) fprintf(stdout, "send Sync length %d \n", strlen(writeValue) );
 
                   connect();
 
@@ -201,6 +304,8 @@ namespace client {
                     free(returnValue);
 
                     returnValue = NULL;
+
+                    if(DEBUG) fprintf(stdout, "send Sync result success \n");
                     return;
                   }
                   else{

@@ -18,12 +18,19 @@ namespace server {
     typedef struct {
         uv_pipe_t* client_handle;
         int pid;
+        int mLen;
+        char* message;
+        char* writing;
     } client;
 
-    typedef struct {
+    struct write_req_s{
         uv_write_t req;
         uv_buf_t buf;
-    } write_req_t;
+        write_req_s* next;
+        int pid;
+    } ;
+
+    typedef struct write_req_s write_req_t;
 
     uv_loop_t * loop_s = NULL;
 
@@ -36,6 +43,8 @@ namespace server {
     void on_new_connection(uv_stream_t *q, int status);
 
     void stop_server();
+
+    void write(write_req_t* req);
 
     int _getpid(){
         #ifdef _WIN32
@@ -85,6 +94,8 @@ namespace server {
 
         c->pid = pid;
 
+        c->message = NULL;
+
         clients.push_back(c);
 
     }
@@ -99,6 +110,9 @@ namespace server {
          for(std::vector<client *>::iterator it=clients.begin(); it!=clients.end(); ){
             if((*it)->client_handle == ch)
             {
+                if((*it)->message != NULL){
+                    free((*it)->message);
+                }
                 it = clients.erase(it);
             }
             else
@@ -198,51 +212,87 @@ namespace server {
         }
     }
 
-    void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
+    void echo_read(uv_stream_t *cli, ssize_t nread, const uv_buf_t *buf) {
 
+        client* c = NULL;
+
+        //if(DEBUG) fprintf(stdout,"Server Read Length %ld: \n",nread);
 
         if (nread > 0) {
 
             char * buffer = (char *) malloc(nread+1);
             memcpy(buffer,buf->base,nread);
             buffer[nread] = 0;
-            if(DEBUG) fprintf(stdout,"Server Read %ld: %s \n",nread,buffer);
+            if(DEBUG) fprintf(stdout,"Server Read %ld \n",nread);
 
             int pid;
             char * message;
+            c = get_client((uv_pipe_t *) cli);
 
-            getPidAndMessage(buffer,&pid,&message);
-            if(get_client((uv_pipe_t *) client) == NULL){
-                add_client(pid ,(uv_pipe_t *) client);
+            if(c == NULL){
+                getPidAndMessage(buffer,&pid,&message);
+                add_client(pid ,(uv_pipe_t *) cli);
                 if(DEBUG) fprintf(stdout,"clients count %d\n", clients.size());
+                c = get_client((uv_pipe_t *) cli);
+                free(buffer);
+            }
+            else{
+                message = buffer;
             }
 
-            if(!pipe_callback->IsEmpty()){
+            char *body;
 
-                Nan::HandleScope scope;
-                v8::Local<v8::Value> argv[2];
+            if(c->message == NULL){
+                int fullLen = 0;
 
-                argv[0] = Nan::New<v8::Number>(pid);
+                getPidAndMessage(message,&fullLen,&body);
 
-                argv[1] = Nan::New(message).ToLocalChecked();
-
-                if(DEBUG) fprintf(stdout,"callback %s\n",message);
-
-                pipe_callback->Call(2, argv);
-
+                if(DEBUG) fprintf(stdout,"body length %d\n", fullLen);
+                c->mLen = fullLen;
+                c->message = (char *) malloc( fullLen + 1);
+                for(int i = 0; i <  fullLen + 1; i++){
+                    c->message[i] = 0;
+                }
+                free(message);
+                strcat(c->message, body);
+                free(body);
+            }
+            else{
+                strcat(c->message, message);
+                free(message);
             }
 
-            free(message);
+            if(DEBUG) fprintf(stdout,"server received %d / %d\n", strlen(c->message),c->mLen);
 
-            free(buffer);
+            if(strlen(c->message) == c->mLen){
+                if(!pipe_callback->IsEmpty()){
+
+                    Nan::HandleScope scope;
+                    v8::Local<v8::Value> argv[2];
+
+                    argv[0] = Nan::New<v8::Number>(c->pid);
+
+                    argv[1] = Nan::New(c->message).ToLocalChecked();
+
+                    if(DEBUG) fprintf(stdout,"callback %s\n",c->message);
+
+                    pipe_callback->Call(2, argv);
+
+                    free(c->message);
+
+                    c->message = NULL;
+                }
+            }
+
+
         }
 
         else if (nread < 0) {
             if(DEBUG) fprintf(stderr, "Server Read error %s\n", uv_err_name(nread));
             if (nread != UV_EOF)
                 if(DEBUG) fprintf(stderr, "Server Read error %s\n", uv_err_name(nread));
-            delete_client((uv_pipe_t *) client);
-            uv_close((uv_handle_t*) client, on_client_closed);
+            delete_client((uv_pipe_t *) cli);
+            uv_close((uv_handle_t*) cli, on_client_closed);
             if(DEBUG) fprintf(stdout,"clients count after delete %d\n", clients.size());
         }
 
@@ -274,13 +324,27 @@ namespace server {
     void write_cb(uv_write_t* req, int status) {
 
        if (status < 0) {
-               if(DEBUG) fprintf(stderr, "Client Write error %s\n", uv_err_name(status));
+               if(DEBUG) fprintf(stderr, "Server Write error %s\n", uv_err_name(status));
        }
+       write_req_t* wr = (write_req_t* )req;
+       if(wr->next != NULL){
+            write_req_t* next = wr->next;
+            next->pid = wr->pid;
+            write(next);
+       }
+       wr->next = NULL;
+       free(wr->buf.base);
+       free(wr);
+    }
+
+    void write(write_req_t* req){
+        if(DEBUG) fprintf(stdout, "Server Write %s\n", req->buf.base);
+        uv_write(&req->req,(uv_stream_t *) get_client(req->pid)->client_handle , &req->buf, 1, write_cb);
     }
 
     void stop_server(){
 
-        if(DEBUG) fprintf(stderr, "stop server \n");
+        if(DEBUG) fprintf(stdout, "stop server \n");
 
         if(server_handle != NULL && uv_is_active((uv_handle_t *) server_handle)){
 
@@ -309,6 +373,18 @@ namespace server {
         }
     }
 
+    int getIntDigits(int num){
+
+        int digits = 0;
+
+        while(num>0){
+           digits += 1;
+           num /= 10;
+        }
+
+        return digits;
+    }
+
     NAN_METHOD(stop){
 
         stop_server();
@@ -323,24 +399,69 @@ namespace server {
 
     }
 
-    NAN_METHOD(write){
+    write_req_t* createWriteReqChain(char * buffer){
 
+        write_req_t *head = (write_req_t*) malloc(sizeof(write_req_t));
+
+        int offset = 0;
+
+        int fullLen = strlen(buffer);
+
+        write_req_t *cur = head;
+
+        do {
+
+           cur->next = (write_req_t*) malloc(sizeof(write_req_t));
+
+           int len = std::min(fullLen-offset, MAX_BUFFER_LENGTH);
+           char *buf;
+           if(offset == 0){
+             int bufLen = len + getIntDigits(fullLen) + 1;
+             buf = (char *) malloc(bufLen + 1);
+             sprintf(buf,"%d#",fullLen);
+             memcpy(buf+getIntDigits(fullLen)+1,buffer+offset,len);
+             buf[bufLen] = 0;
+           }
+           else{
+             buf = (char *) malloc(len + 1);
+             memcpy(buf,buffer+offset,len);
+             buf[len] = 0;
+           }
+           cur->next->buf = uv_buf_init(buf, strlen(buf));
+           cur = cur->next;
+           offset += len;
+        } while (offset < fullLen);
+
+        free(buffer);
+        cur = head->next;
+        free(head);
+
+        return cur;
+    }
+
+    NAN_METHOD(write){
         if (info.Length() > 1) {
             if (info[1]->IsString() && info[0]->IsNumber()) {
+
+
               String::Utf8Value str(info[1]->ToString());
 
               char * buffer = strdup(ToCString(str));
 
-              write_req_t *req = (write_req_t*) malloc(sizeof(write_req_t));
-
-              req->buf = uv_buf_init(buffer, strlen(buffer));
+              write_req_t *req = createWriteReqChain(buffer);
 
               int pid = (int) Local<Number>::Cast(info[0])->NumberValue();
 
               client* c = get_client(pid);
 
+
+
               if(c != NULL){
-                uv_write(&req->req,(uv_stream_t *) c->client_handle , &req->buf, 1, write_cb);
+                 req->pid = c->pid;
+                 write(req);
+              }
+              else{
+                if(DEBUG) fprintf(stderr,"client is null");
               }
 
               return;

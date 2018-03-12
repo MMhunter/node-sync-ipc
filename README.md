@@ -1,5 +1,7 @@
 # node-sync-ipc
 
+[![Build Status](https://travis-ci.org/MMhunter/node-sync-ipc.svg?branch=master)](https://travis-ci.org/MMhunter/node-sync-ipc)
+
 `node-sync-ipc` is a tiny library making it possible for child node.js processes created by `child_process.fork` to send synchronous message to parent process. It can block the child process until the parent make a response. This use case is kind of rare but I hope it can be of some help if anyone needs.
 
 # Install

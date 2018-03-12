@@ -23,7 +23,7 @@ In parent process:
 var syncIpc = require("node-sync-ipc").parent();
 
 // fork the child process just like child_process.fork()
-var child = syncIpc.fork("./child.js");
+var child = syncIpc.fork("./child-cal-sum.js");
 
 child.onSync("foo",function(res,bar){
 
@@ -41,7 +41,7 @@ In child process:
 
 ````javascript
 
-// child.js
+// child-cal-sum.js
 
 var syncIpc = require("node-sync-ipc").child();
 
@@ -65,7 +65,7 @@ Also class information will be lost during the communication.
 On Unix based system, this module would create a `nodePipe${parentPid}.sock` in the home directory (or defined by the HOME environment variable). In most cases this file would be deleted correctly. But currently it is not guaranteed if process was killed unexpectedly.
 
 
-## Electron
+## Electron && NW.js
 
 This module has c++ add-ons, so you have to rebuild it to use it in Electron.
 

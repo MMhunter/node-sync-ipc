@@ -4,7 +4,9 @@
 #include <vector>
 #include "basic.h"
 
-
+/**
+	Server side of the pipe
+*/
 namespace server {
 
     using v8::FunctionCallbackInfo;
@@ -15,37 +17,48 @@ namespace server {
     using v8::Value;
     using v8::Number;
 
-    typedef struct {
-        uv_pipe_t* client_handle;
-        int pid;
-        int mLen;
-        char* message;
-        char* writing;
+	/* 
+	* Struct Client
+	* Server Keeps a List of Clients to send message to the correct client (by pid searching)
+	*/
+	typedef struct {
+        uv_pipe_t* client_handle; /* the uv_pip handle of this client */
+        int pid; /* the process id of this client process*/
+        int mLen; /* the expected length of the next message */
+        char* message; /* the received message */
     } client;
 
+	
+	/* The writing request list node. 
+	If the data is very long, the request is repesented as a linked list. */
     struct write_req_s{
-        uv_write_t req;
-        uv_buf_t buf;
-        write_req_s* next;
-        int pid;
+        uv_write_t req; /*libuv's writing structure */
+        uv_buf_t buf; /* content buffer to write*/
+		write_req_s* next; /* the next writing request */
+        int pid; /* target client pid*/
     } ;
 
     typedef struct write_req_s write_req_t;
 
-    uv_loop_t * loop_s = NULL;
-
+	/* The server-side uv_pipe handle */
     uv_pipe_t * server_handle;
 
+	/* The list of clients*/
     std::vector<client *> clients;
 
+	/* Callback function to be executed when messsage received from clients */
     Nan::Callback* pipe_callback = new Nan::Callback();
 
+	/* when new client connected */
     void on_new_connection(uv_stream_t *q, int status);
 
+	/* stop the server*/
     void stop_server();
 
+	/* do single wirte action. This function will be called recursively if req->next is not NULL */
     void write(write_req_t* req);
 
+	/* get the pid of current process (server-side) */
     int _getpid(){
         #ifdef _WIN32
         return GetCurrentProcessId();
@@ -54,6 +67,24 @@ namespace server {
         #endif
     }
 
+	/* get the digital length of an integer */
+	int getIntDigits(int num) {
+
+		int digits = 0;
+
+		while (num>0) {
+			digits += 1;
+			num /= 10;
+		}
+
+		return digits;
+	}
+
+	const char* ToCString(const String::Utf8Value& value) {
+		return *value ? *value : "<string conversion failed>";
+	}
+	
+	/* get the name of the pipe (in Unix it is the name of the sock file) */
     char * getPipename(){
 
         char * pipename;
@@ -68,6 +99,7 @@ namespace server {
            pid_digits += 1;
            temp /= 10;
         }
+
         #ifdef _WIN32
         const char* pipename_preset = "\\\\.\\pipe\\nodePipe";
         pipename = (char *) malloc(sizeof(char) * (strlen(pipename_preset)+pid_digits+1));
@@ -85,7 +117,7 @@ namespace server {
         return pipename;
     }
 
-
+	/* add a client to the client list */
     void add_client(int pid, uv_pipe_t* client_handle){
 
         client * c = (client *) malloc(sizeof(client));
@@ -100,12 +132,8 @@ namespace server {
 
     }
 
-    const char* ToCString(const String::Utf8Value& value) {
-          return *value ? *value : "<string conversion failed>";
-    }
-
+	/* delete client by uv_pipe handle*/
     void delete_client(uv_pipe_t* ch){
-
 
          for(std::vector<client *>::iterator it=clients.begin(); it!=clients.end(); ){
             if((*it)->client_handle == ch)
@@ -122,6 +150,7 @@ namespace server {
          }
     }
 
+	/* get client by pid*/
     client* get_client(int pid){
         client * c = NULL;
 
@@ -135,8 +164,8 @@ namespace server {
         return c;
     }
 
+	/* get client by uv_pipe handle */
     client* get_client(uv_pipe_t* ch){
-
 
          for(std::vector<client *>::iterator it=clients.begin(); it!=clients.end(); ){
             if((*it)->client_handle == ch)
@@ -159,20 +188,14 @@ namespace server {
         free(wr->buf.base);
         free(wr);
     }
-
-    void echo_write(uv_write_t *req, int status) {
-        if (status < 0) {
-            if(DEBUG) fprintf(stderr, "Write error %s\n", uv_err_name(status));
-        }
-        free_write_req(req);
-    }
-
-    void getPidAndMessage(char* raw, int * pid, char ** message){
+	
+	/* extract the first Interger before '#' */
+    void extractFirstInteger(char * origin, int * firstInt, char ** rest){
 
 
-        int count = strlen(raw);
+        int count = strlen(origin);
         int i = 0;
-        while(raw[i] != '#' && raw[i]){
+        while(origin[i] != '#' && origin[i]){
             i++;
             if(i >= count){
                 break;
@@ -184,23 +207,25 @@ namespace server {
         }
 
         char * pidSub = (char *) malloc(sizeof(char) * (i+1));
-        memcpy( pidSub,raw, i );
+        memcpy( pidSub, origin, i );
         pidSub[i] = '\0';
-        *pid = atoi(pidSub);
+        *firstInt = atoi(pidSub);
         free(pidSub);
 
-        *message = (char *) malloc(sizeof(char) * (strlen(raw)-i));
-        memcpy(*message,raw+i+1,strlen(raw)-i-1);
-        (*message)[strlen(raw)-i-1] = '\0';
+        *rest = (char *) malloc(sizeof(char) * (strlen(origin)-i));
+        memcpy(*rest, origin +i+1,strlen(origin)-i-1);
+        (*rest)[strlen(origin)-i-1] = '\0';
 
     }
 
+	/*callback when server is closed */
     void on_server_closed(uv_handle_t * server){
-        if(DEBUG) fprintf(stderr, "stop server3 \n");
+        if(DEBUG) fprintf(stderr, "on server closed called \n");
         free(server);
         server_handle = NULL;
     }
 
+	/* when client uv_pipe handle is closed*/
     void on_client_closed(uv_handle_t * client){
         free(client);
     }
@@ -212,27 +237,26 @@ namespace server {
         }
     }
 
-    void echo_read(uv_stream_t *cli, ssize_t nread, const uv_buf_t *buf) {
+	/* when data received from client */
+    void on_read_data(uv_stream_t *cli, ssize_t nread, const uv_buf_t *buf) {
 
         client* c = NULL;
-
-        //if(DEBUG) fprintf(stdout,"Server Read Length %ld: \n",nread);
 
         if (nread > 0) {
 
             char * buffer = (char *) malloc(nread+1);
             memcpy(buffer,buf->base,nread);
             buffer[nread] = 0;
-            if(DEBUG) fprintf(stdout,"Server Read %ld \n",nread);
+            if(DEBUG) fprintf(stdout,"Server Read Length %ld \n",nread);
 
             int pid;
             char * message;
             c = get_client((uv_pipe_t *) cli);
 
             if(c == NULL){
-                getPidAndMessage(buffer,&pid,&message);
+                extractFirstInteger(buffer,&pid,&message);
                 add_client(pid ,(uv_pipe_t *) cli);
-                if(DEBUG) fprintf(stdout,"clients count %d\n", clients.size());
+                if(DEBUG) fprintf(stdout,"The current size of clients is %d\n", clients.size());
                 c = get_client((uv_pipe_t *) cli);
                 free(buffer);
             }
@@ -242,12 +266,14 @@ namespace server {
 
             char *body;
 
+			// If the client's message is NULL, get the length of this message
+			// The message is formatted as length#body
             if(c->message == NULL){
                 int fullLen = 0;
 
-                getPidAndMessage(message,&fullLen,&body);
+                extractFirstInteger(message,&fullLen,&body);
 
-                if(DEBUG) fprintf(stdout,"body length %d\n", fullLen);
+                if(DEBUG) fprintf(stdout,"the total length of this message is %d\n", fullLen);
                 c->mLen = fullLen;
                 c->message = (char *) malloc( fullLen + 1);
                 for(int i = 0; i <  fullLen + 1; i++){
@@ -299,14 +325,12 @@ namespace server {
         free(buf->base);
     }
 
+	/* create server-side uv_pipe handle and start listening */
+    void create_server(){
 
-
-    void createL(){
-
-        loop_s = uv_default_loop();
 
         server_handle = (uv_pipe_t *) malloc(sizeof(uv_pipe_t));
-        uv_pipe_init(loop_s, server_handle, 0);
+        uv_pipe_init(uv_default_loop(), server_handle, 0);
 
         int r;
 
@@ -320,6 +344,26 @@ namespace server {
         }
 
     }
+
+	void on_new_connection(uv_stream_t *server, int status) {
+
+		if (status == -1) {
+			// error!
+			if (DEBUG) fprintf(stderr, "connected error %d \n", status);
+			return;
+		}
+		if (DEBUG) fprintf(stderr, "connected %d \n", status);
+		uv_pipe_t* client = (uv_pipe_t *)malloc(sizeof(uv_pipe_t));
+		uv_pipe_init(uv_default_loop(), client, 0);
+		if (uv_accept(server, (uv_stream_t*)client) == 0) {
+			if (DEBUG) fprintf(stderr, "accepted \n");
+			uv_read_start((uv_stream_t*)client, alloc_buffer, on_read_data);
+		}
+		else {
+			if (DEBUG) fprintf(stderr, "read start error \n");
+			uv_close((uv_handle_t*)client, on_client_closed);
+		}
+	}
 
     void write_cb(uv_write_t* req, int status) {
 
@@ -342,17 +386,59 @@ namespace server {
         uv_write(&req->req,(uv_stream_t *) get_client(req->pid)->client_handle , &req->buf, 1, write_cb);
     }
 
+	/* create a writing request chain for wirting. */
+	write_req_t* createWriteReqChain(char * buffer) {
+
+		write_req_t *head = (write_req_t*)malloc(sizeof(write_req_t));
+
+		int offset = 0;
+
+		int fullLen = strlen(buffer);
+
+		write_req_t *cur = head;
+
+		do {
+
+			cur->next = (write_req_t*)malloc(sizeof(write_req_t));
+
+			int len = std::min(fullLen - offset, MAX_BUFFER_LENGTH);
+			char *buf;
+			if (offset == 0) {
+				int bufLen = len + getIntDigits(fullLen) + 1;
+				buf = (char *)malloc(bufLen + 1);
+				sprintf(buf, "%d#", fullLen);
+				memcpy(buf + getIntDigits(fullLen) + 1, buffer + offset, len);
+				buf[bufLen] = 0;
+			}
+			else {
+				buf = (char *)malloc(len + 1);
+				memcpy(buf, buffer + offset, len);
+				buf[len] = 0;
+			}
+			cur->next->buf = uv_buf_init(buf, strlen(buf));
+			cur = cur->next;
+			offset += len;
+		} while (offset < fullLen);
+
+		cur->next = NULL;
+		free(buffer);
+		cur = head->next;
+		free(head);
+
+		return cur;
+	}
+
     void stop_server(){
 
-        if(DEBUG) fprintf(stdout, "stop server \n");
+        if(DEBUG) fprintf(stdout, "start stopping server \n");
 
         if(server_handle != NULL && uv_is_active((uv_handle_t *) server_handle)){
 
-            if(DEBUG) fprintf(stderr, "stop server2 \n");
-            if(DEBUG) fprintf(stderr,"server pending count %d",uv_pipe_pending_count(server_handle));
+            if(DEBUG) fprintf(stderr,"current connected clients length is %d",uv_pipe_pending_count(server_handle));
 
             #ifdef _WIN32
             #else
+			// delete sock file on unix based systems.
             uv_fs_t* req = (uv_fs_t *) malloc(sizeof(uv_fs_t));
             int r = uv_fs_unlink(uv_default_loop(), req, getPipename(), (uv_fs_cb) free);
             if(r != 0){
@@ -373,18 +459,9 @@ namespace server {
         }
     }
 
-    int getIntDigits(int num){
+	
 
-        int digits = 0;
-
-        while(num>0){
-           digits += 1;
-           num /= 10;
-        }
-
-        return digits;
-    }
-
+	/* stop the server */
     NAN_METHOD(stop){
 
         stop_server();
@@ -392,53 +469,17 @@ namespace server {
 
     }
 
+	/* create the server */
     NAN_METHOD(createServer){
 
-        createL();
+        create_server();
         return;
 
     }
 
-    write_req_t* createWriteReqChain(char * buffer){
+	
 
-        write_req_t *head = (write_req_t*) malloc(sizeof(write_req_t));
-
-        int offset = 0;
-
-        int fullLen = strlen(buffer);
-
-        write_req_t *cur = head;
-
-        do {
-
-           cur->next = (write_req_t*) malloc(sizeof(write_req_t));
-
-           int len = std::min(fullLen-offset, MAX_BUFFER_LENGTH);
-           char *buf;
-           if(offset == 0){
-             int bufLen = len + getIntDigits(fullLen) + 1;
-             buf = (char *) malloc(bufLen + 1);
-             sprintf(buf,"%d#",fullLen);
-             memcpy(buf+getIntDigits(fullLen)+1,buffer+offset,len);
-             buf[bufLen] = 0;
-           }
-           else{
-             buf = (char *) malloc(len + 1);
-             memcpy(buf,buffer+offset,len);
-             buf[len] = 0;
-           }
-           cur->next->buf = uv_buf_init(buf, strlen(buf));
-           cur = cur->next;
-           offset += len;
-        } while (offset < fullLen);
-
-        free(buffer);
-        cur = head->next;
-        free(head);
-
-        return cur;
-    }
-
+	/* write to the target client */
     NAN_METHOD(write){
         if (info.Length() > 1) {
             if (info[1]->IsString() && info[0]->IsNumber()) {
@@ -469,7 +510,7 @@ namespace server {
         }
     }
 
-
+	/* bind a listener function to receive message.*/
     NAN_METHOD(bindPipeListener){
 
         if (!info[0]->IsFunction()) {
@@ -494,26 +535,6 @@ namespace server {
 
     NODE_MODULE(NODE_GYP_MODULE_NAME, init)
 
-
-    void on_new_connection(uv_stream_t *server, int status) {
-
-        if (status == -1) {
-            // error!
-            if(DEBUG) fprintf(stderr,"connected error %d \n", status);
-            return;
-        }
-        if(DEBUG) fprintf(stderr,"connected %d \n", status);
-        uv_pipe_t* client = (uv_pipe_t *) malloc(sizeof(uv_pipe_t));
-        uv_pipe_init(loop_s,client,0);
-        if (uv_accept(server, (uv_stream_t*) client) == 0) {
-            if(DEBUG) fprintf(stderr,"accepted \n");
-            uv_read_start((uv_stream_t*) client, alloc_buffer, echo_read);
-        }
-        else {
-            if(DEBUG) fprintf(stderr,"read start error \n");
-            uv_close((uv_handle_t*) client, on_client_closed);
-        }
-    }
 
 }
 

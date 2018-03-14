@@ -27,6 +27,9 @@ var syncIpc = require("node-sync-ipc").parent();
 // fork the child process just like child_process.fork()
 var child = syncIpc.fork("./child-cal-sum.js");
 
+// or add an existing process instance forked from this process
+// syncIpc.addChild(child);
+
 child.onSync("foo",function(res,bar){
 
     bar = bar + " " +bar;

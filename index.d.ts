@@ -13,14 +13,14 @@ declare namespace NodeSyncIpc{
 
     interface NodeSyncIpcChildProcess extends child_process.ChildProcess{
 
-        onSync(event:string,listener:(res:(returnValue?)=>void,...args:any[])=>void);
+        onSync(event:string,listener:(res:(returnValue?:any)=>void,...args:any[])=>void):any;
 
     }
 
 
     interface NodeSyncIpcChild{
 
-        sendSync(event:string,...args:any[]);
+        sendSync(event:string,...args:any[]):any;
 
     }
 

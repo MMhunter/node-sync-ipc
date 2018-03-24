@@ -29,6 +29,27 @@ describe("Basic Function Test",()=>{
         });
     });
 
+    it("should get the right sum [using add child]",(done)=>{
+
+        var child = require("child_process").fork(path.join(__dirname,"./child-cal-sum.js"));
+        syncIpc.addChild(child);
+        var nextNumber = getNextNumber();
+
+        var sum = 0;
+
+        child.onSync("next",function(res){
+            res(nextNumber);
+            sum += nextNumber;
+            nextNumber = getNextNumber();
+        });
+
+        child.onSync("result",function(res,result){
+            res();
+            assert.equal(sum,result);
+            done();
+        });
+    });
+
     it("long arr should be same",(done)=>{
 
         var child = syncIpc.fork(path.join(__dirname,"./child-long-str.js"));

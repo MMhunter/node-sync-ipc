@@ -58,8 +58,13 @@ namespace server {
 	/* do single wirte action. This function will be called recursively if req->next is not NULL */
     void write(write_req_t* req);
 
+    int custom_pid = -1;
+
 	/* get the pid of current process (server-side) */
     int _getpid(){
+        if (custom_pid > 0) {
+          return custom_pid;
+        }
         #ifdef _WIN32
         return GetCurrentProcessId();
         #else
@@ -472,6 +477,11 @@ namespace server {
 	/* create the server */
     NAN_METHOD(createServer){
 
+        if (info.Length() > 1) {
+          if (info[0]->IsNumber()) {
+            custom_pid = (int) Local<Number>::Cast(info[0])->NumberValue();
+          }
+        }
         create_server();
         return;
 

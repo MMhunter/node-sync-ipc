@@ -5,5 +5,7 @@
  */
 module.exports = {
     parent:()=>{ return require("./lib/parent") },
-    child:()=>{ return require("./lib/child")}
+    child:()=>{ return require("./lib/child")},
+    SyncIPCServer: require('./lib/server').SyncIPCServer,
+    SyncIPCClient: require('./lib/client').SyncIPCClient,
 };

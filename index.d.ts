@@ -30,6 +30,25 @@ declare namespace NodeSyncIpc{
 
     export function child():NodeSyncIpcChild;
 
+    export type MessageListener = (res:(returnValue?:any)=>void, pid:number, ...args:any[]) => void
 
+    export class SyncIPCServer {
+
+        public start(handle?:number): void;
+
+        public onMessage(event: string, listener: MessageListener): void;
+
+        public stop(): void;
+
+        public dispose(): void;
+    }
+
+    export class SyncIPCClient {
+
+        constructor(serverHandle?:number);
+
+        sendSync(event:string,...args:any[]):any;
+
+    }
 }
 

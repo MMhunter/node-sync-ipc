@@ -107,7 +107,9 @@ namespace server {
 
         #ifdef _WIN32
         const char* pipename_preset = "\\\\.\\pipe\\nodePipe";
-        pipename = (char *) malloc(sizeof(char) * (strlen(pipename_preset)+pid_digits+1));
+        int pipnameLen = (strlen(pipename_preset)+pid_digits+1);
+        pipename = (char *) malloc(sizeof(char) * pipnameLen);
+        pipename[pipnameLen] = 0;
         sprintf(pipename,"%s%d",pipename_preset,pid);
         #else
         const char *homedir;
@@ -115,7 +117,9 @@ namespace server {
             homedir = getpwuid(getuid())->pw_dir;
         }
         const char* pipename_preset = "nodePipe";
-        pipename = (char *) malloc(sizeof(char) * (strlen(pipename_preset)+pid_digits+strlen(homedir)+7));
+        int pipnameLen = (strlen(pipename_preset)+pid_digits+strlen(homedir)+7);
+        pipename = (char *) malloc(sizeof(char) * pipnameLen);
+        pipename[pipnameLen] = 0;
         sprintf(pipename,"/%s/%s%d.sock",homedir,pipename_preset,pid);
         #endif
 
@@ -331,23 +335,26 @@ namespace server {
     }
 
 	/* create server-side uv_pipe handle and start listening */
-    void create_server(){
+    int create_server(){
 
 
         server_handle = (uv_pipe_t *) malloc(sizeof(uv_pipe_t));
         uv_pipe_init(uv_default_loop(), server_handle, 0);
 
-        int r;
+        int r = 0;
+
+         if(DEBUG) fprintf(stdout,"creating server with pipe name %s\n", getPipename());
 
         if ((r = uv_pipe_bind(server_handle, getPipename()))) {
             if(DEBUG) fprintf(stderr, "Bind error %s\n", uv_err_name(r));
-            return;
+            return r;
         }
         if ((r = uv_listen((uv_stream_t*) server_handle, 128, on_new_connection))) {
             if(DEBUG) fprintf(stderr, "Listen error %s\n", uv_err_name(r));
-            return;
+            return r;
         }
 
+        return r;
     }
 
 	void on_new_connection(uv_stream_t *server, int status) {
@@ -439,7 +446,7 @@ namespace server {
 
         if(server_handle != NULL && uv_is_active((uv_handle_t *) server_handle)){
 
-            if(DEBUG) fprintf(stderr,"current connected clients length is %d",uv_pipe_pending_count(server_handle));
+            if(DEBUG) fprintf(stdout,"current connected clients length is %d",uv_pipe_pending_count(server_handle));
 
             #ifdef _WIN32
             #else
@@ -453,7 +460,7 @@ namespace server {
 
             if(clients.size() > 0){
                 for(std::vector<client *>::iterator it=clients.begin(); it!=clients.end(); ){
-                    uv_close((uv_handle_t *) (*it)->client_handle, on_client_closed_when_stop);
+//                    uv_close((uv_handle_t *) (*it)->client_handle, on_client_closed_when_stop);
                     it = clients.erase(it);
                 }
             }
@@ -477,12 +484,16 @@ namespace server {
 	/* create the server */
     NAN_METHOD(createServer){
 
-        if (info.Length() > 1) {
+        if (info.Length() > 0) {
           if (info[0]->IsNumber()) {
+           if(DEBUG) fprintf(stdout, "set custom pid %d\n", (int) Local<Number>::Cast(info[0])->NumberValue());
             custom_pid = (int) Local<Number>::Cast(info[0])->NumberValue();
           }
         }
-        create_server();
+        int r = create_server();
+        if (r != 0) {
+          Nan::ThrowError(uv_err_name(r));
+        }
         return;
 
     }

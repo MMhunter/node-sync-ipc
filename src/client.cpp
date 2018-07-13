@@ -42,7 +42,7 @@ namespace client {
     int pid_digits;
 
 	/* pid of server process*/
-    int server_pid;
+    int server_pid = 0;
 
 	/* current offset to be written*/
     int writingOffset = 0;
@@ -283,6 +283,42 @@ namespace client {
 
     }
 
+    char * getPipeName(){
+
+        char * pipename;
+
+        if(server_pid == 0){
+            server_pid = _getppid();
+        }
+        int temp = server_pid;
+        int server_pid_digits = 0;
+        while(temp>0){
+           server_pid_digits += 1;
+           temp /= 10;
+        }
+        #ifdef _WIN32
+        const char* pipename_preset = "\\\\.\\pipe\\nodePipe";
+        int pipnameLen = (strlen(pipename_preset)+server_pid_digits+1);
+        pipename = (char *) malloc(sizeof(char) * pipnameLen);
+        sprintf(pipename,"%s%d",pipename_preset,server_pid);
+        pipename[pipnameLen] = 0;
+        #else
+        const char *homedir;
+        if ((homedir = getenv("HOME")) == NULL) {
+            homedir = getpwuid(getuid())->pw_dir;
+        }
+        const char* pipename_preset = "nodePipe";
+        int pipnameLen = (strlen(pipename_preset)+server_pid_digits+strlen(homedir)+7);
+        pipename = (char *) malloc(sizeof(char) * pipnameLen);
+        sprintf(pipename,"/%s/%s%d.sock",homedir,pipename_preset,server_pid);
+        pipename[pipnameLen] = 0;
+        #endif
+
+        if(DEBUG) fprintf(stdout,"set pipe to %s\n", pipename);
+
+        return pipename;
+    }
+
 	/* connect to server and send message.
 	Here we create a new uv_loop inside default loop to block the default loop. */
     void connect_and_send(){
@@ -296,6 +332,10 @@ namespace client {
         client_handle = (uv_pipe_t *) malloc(sizeof(uv_pipe_t));
 
         uv_pipe_init(ipc_loop, client_handle,0);
+
+        char * pipename = getPipeName();
+
+        if(DEBUG) fprintf(stdout,"connecting to server %s\n", pipename);
 
         uv_pipe_connect(req, client_handle, pipename, on_client_connected);
 
@@ -315,29 +355,8 @@ namespace client {
         if (info.Length() > 0) {
             if (info[0]->IsNumber()) {
 
-                int parent_pid = (int) Local<Number>::Cast(info[0])->NumberValue();
-                if(parent_pid == 0){
-                    parent_pid = _getppid();
-                }
-                int temp = parent_pid;
-                int parent_pid_digits = 0;
-                while(temp>0){
-                   parent_pid_digits += 1;
-                   temp /= 10;
-                }
-                #ifdef _WIN32
-                const char* pipename_preset = "\\\\.\\pipe\\nodePipe";
-                pipename = (char *) malloc(sizeof(char) * (strlen(pipename_preset)+parent_pid_digits+1));
-                sprintf(pipename,"%s%d",pipename_preset,parent_pid);
-                #else
-                const char *homedir;
-                if ((homedir = getenv("HOME")) == NULL) {
-                    homedir = getpwuid(getuid())->pw_dir;
-                }
-                const char* pipename_preset = "nodePipe";
-                pipename = (char *) malloc(sizeof(char) * (strlen(pipename_preset)+parent_pid_digits+strlen(homedir)+7));
-                sprintf(pipename,"/%s/%s%d.sock",homedir,pipename_preset,parent_pid);
-                #endif
+                server_pid = (int) Local<Number>::Cast(info[0])->NumberValue();
+
 
             }
         }

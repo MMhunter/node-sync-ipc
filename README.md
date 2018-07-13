@@ -47,7 +47,7 @@ In child process:
 
 ````javascript
 
-// child-cal-sum.js
+// child.js
 
 var syncIpc = require("node-sync-ipc").child();
 
@@ -63,7 +63,7 @@ Server side:
 
 ````javascript
 
-// parent.js
+// server.js
 
 const SyncIPCServer = require("node-sync-ipc").SyncIPCServer;
 
@@ -87,20 +87,23 @@ server.onMessage("foo",function(res,pid,bar){
 
 });
 
+//stop server when not needed
+//server.stop()
+
 ````
 
 Client Side:
 
 ````javascript
 
-// child-cal-sum.js
+// client.js
 
-const SyncIPCClient = require("../../index").SyncIPCClient;
+const SyncIPCClient = require("node-sync-ipc").SyncIPCClient;
 
 // handle number
 const handle = 1234;
 
-const client = new SyncIPCClient(handle)
+const client = new SyncIPCClient(handle);
 
 // will log "echo content echo content" in console
 

@@ -14,8 +14,9 @@ npm install node-sync-ipc
 
 # Usage
 
-In parent process:
+## Parent and Child Mode
 
+In parent process:
 
 
 ````javascript
@@ -55,6 +56,59 @@ var syncIpc = require("node-sync-ipc").child();
 console.log(syncIpc.sendSync("foo","echo content"));
 
 ````
+
+## Server And Client Mode
+
+Server side:
+
+````javascript
+
+// parent.js
+
+const SyncIPCServer = require("node-sync-ipc").SyncIPCServer;
+
+const server = new SyncIPCServer();
+
+// handle number
+const handle = 1234;
+
+server.start(handle);
+
+server.onMessage("foo",function(res,pid,bar){
+
+    // pid is the pid of client side process
+
+    bar = bar + " " +bar;
+    // block the child process for one second
+    setTimeout(function(){
+        // the first argument will be passed to child process as the result
+        res(bar);
+    },1000)
+
+});
+
+````
+
+Client Side:
+
+````javascript
+
+// child-cal-sum.js
+
+const SyncIPCClient = require("../../index").SyncIPCClient;
+
+// handle number
+const handle = 1234;
+
+const client = new SyncIPCClient(handle)
+
+// will log "echo content echo content" in console
+
+console.log(client.sendSync("foo","echo content"));
+
+````
+
+
 
 # Attention
 

@@ -5,7 +5,7 @@
  */
 const path = require("path");
 
-var syncIpc = new (require("../../index").SyncIPCClient)(path.join(require('os').tmpdir(), 'temp.sock'));
+var syncIpc = new (require("../../index").SyncIPCClient)(process.env.SYNC_PIPE);
 
 let sum = 0;
 

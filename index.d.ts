@@ -20,7 +20,7 @@ declare namespace NodeSyncIpc{
 
     export class SyncIPCClient {
 
-        constructor(serverHandle?:number);
+        constructor(serverHandle?:string);
 
         sendSync(event:string,...args:any[]):any;
 

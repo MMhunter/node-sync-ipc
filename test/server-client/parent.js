@@ -12,16 +12,19 @@ const childProcess = require('child_process');
 describe("Server Client Mode Test",()=>{
 
 
-  const server = new SyncIPCServer(require("path").join(require('os').tmpdir(), 'temp.sock'));
+
 
 
 
   it("should get the right sum",(done)=>{
 
+        const pipeFile = require("path").join(require('os').tmpdir(), 'temp1.sock');
+
+        const server = new SyncIPCServer(pipeFile);
 
         server.startListen();
 
-        require("child_process").fork(path.join(__dirname,"./child-cal-sum.js"));
+        require("child_process").fork(path.join(__dirname,"./child-cal-sum.js"),{env:{SYNC_PIPE:pipeFile}});
 
         var nextNumber = getNextNumber();
 
@@ -46,9 +49,13 @@ describe("Server Client Mode Test",()=>{
 
     it("should get the right sum [using add child]",(done)=>{
 
+      const pipeFile = require("path").join(require('os').tmpdir(), 'temp2.sock');
+
+      const server = new SyncIPCServer(pipeFile);
+
         server.startListen();
 
-        var child = require("child_process").fork(path.join(__dirname,"./child-cal-sum.js"));
+        var child = require("child_process").fork(path.join(__dirname,"./child-cal-sum.js"),{env:{SYNC_PIPE:pipeFile}});
 
         var nextNumber = getNextNumber();
 
@@ -73,7 +80,11 @@ describe("Server Client Mode Test",()=>{
 
     it("long arr should be same",(done)=>{
 
-        var child = require("child_process").fork(path.join(__dirname,"./child-long-str.js"));
+      const pipeFile = require("path").join(require('os').tmpdir(), 'temp3.sock');
+
+      const server = new SyncIPCServer(pipeFile);
+
+        var child = require("child_process").fork(path.join(__dirname,"./child-long-str.js"),{env:{SYNC_PIPE:pipeFile}});
 
         var r;
 
@@ -100,6 +111,11 @@ describe("Server Client Mode Test",()=>{
     })
 
     it("multiple child share data",(done)=>{
+
+      const pipeFile = require("path").join(require('os').tmpdir(), 'temp4.sock');
+
+      const server = new SyncIPCServer(pipeFile);
+
         server.startListen();
         var nextNumber = getNextNumber();
         var sum = 0;
@@ -107,7 +123,7 @@ describe("Server Client Mode Test",()=>{
         var childSum = 0;
         for(let i = 0; i < 5; i++){
 
-            var child = require("child_process").fork(path.join(__dirname,"./child-cal-sum-multiple.js"));
+            var child = require("child_process").fork(path.join(__dirname,"./child-cal-sum-multiple.js"),{env:{SYNC_PIPE:pipeFile}});
 
         }
 

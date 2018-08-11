@@ -11,11 +11,15 @@ const childProcess = require('child_process');
 
 describe("Server Client Mode Test",()=>{
 
-    const server = new SyncIPCServer();
 
-    it("should get the right sum",(done)=>{
+  const server = new SyncIPCServer(require("path").join(require('os').tmpdir(), 'temp.sock'));
 
-        server.start(100);
+
+
+  it("should get the right sum",(done)=>{
+
+
+        server.startListen();
 
         require("child_process").fork(path.join(__dirname,"./child-cal-sum.js"));
 
@@ -29,17 +33,20 @@ describe("Server Client Mode Test",()=>{
             nextNumber = getNextNumber();
         });
 
-        server.onMessage("result",function(res,pid,result){
+        server.onMessage("result",function(res,result){
             res();
-            assert.equal(sum,result);
-            server.stop();
-            done();
+            try{
+              assert.equal(sum,result);
+              done();
+            } finally {
+              server.stop();
+            }
         });
     });
 
     it("should get the right sum [using add child]",(done)=>{
 
-        server.start(100);
+        server.startListen();
 
         var child = require("child_process").fork(path.join(__dirname,"./child-cal-sum.js"));
 
@@ -53,11 +60,14 @@ describe("Server Client Mode Test",()=>{
             nextNumber = getNextNumber();
         });
 
-        server.onMessage("result",function(res,pid,result){
+        server.onMessage("result",function(res,result){
             res();
-            assert.equal(sum,result);
-            server.stop();
-            done();
+              try{
+                assert.equal(sum,result);
+                done();
+              } finally {
+                server.stop();
+              }
         });
     });
 
@@ -67,9 +77,9 @@ describe("Server Client Mode Test",()=>{
 
         var r;
 
-        server.start(1001);
+        server.startListen();
 
-        server.onMessage("foo",function(res,pid,bar){
+        server.onMessage("foo",function(res,bar){
 
             r = bar;
             setTimeout(function(){
@@ -77,7 +87,7 @@ describe("Server Client Mode Test",()=>{
             },500);
         });
 
-        server.onMessage("result",function(res,pid,bar){
+        server.onMessage("result",function(res,bar){
             res();
             assert.equal(r.length,bar.length);
             for(let i = 0; i < 5; i++){
@@ -90,7 +100,7 @@ describe("Server Client Mode Test",()=>{
     })
 
     it("multiple child share data",(done)=>{
-        server.start(1002);
+        server.startListen();
         var nextNumber = getNextNumber();
         var sum = 0;
         var finishedCount = 0;
@@ -107,7 +117,7 @@ describe("Server Client Mode Test",()=>{
          nextNumber = getNextNumber();
        });
 
-       server.onMessage("result",function(res,pid,result){
+       server.onMessage("result",function(res,result){
          res();
          childSum += result;
          finishedCount ++;

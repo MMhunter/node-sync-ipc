@@ -1,419 +1,243 @@
 #include <node.h>
 #include <uv.h>
 #include <nan.h>
-#include <string.h>
+#include <map>
 #include "basic.h"
+#include "utils.cpp"
 
-/*
-	Client side of the pipe
-*/
+
 namespace client {
 
-    using v8::FunctionCallbackInfo;
-    using v8::Isolate;
-    using v8::Local;
-    using v8::Object;
-    using v8::String;
-    using v8::Value;
-    using v8::Number;
-
-	/* message buffer received from server */
-    char * returnValue;
-
-	/* buffer to write to server*/
-    char * writeValue;
-
-	/* server's pipe name*/
-    char * pipename;
-
-	/* the buffer's total length to be read from server */
-    int readFullLen;
-
-	/* the client-side uv_pipe handle */
-    uv_pipe_t* client_handle;
-
-	/* uv_loop created inside default loop*/
-    uv_loop_t * ipc_loop = NULL;
-
-	/* pid of current client process */
-    int pid;
-
-	/* number of pid's digits*/
-    int pid_digits;
-
-	/* pid of server process*/
-    int server_pid = 0;
-
-	/* current offset to be written*/
-    int writingOffset = 0;
-
-	/* write message to server*/
-    void write();
-
-	/* get digits of integer */
-    int getIntDigits(int num){
-
-        int digits = 0;
-
-        while(num>0){
-           digits += 1;
-           num /= 10;
-        }
-
-        return digits;
-    }
-	
-	/* get the pid of current process */
-	int _getpid() {
-#ifdef _WIN32
-		return GetCurrentProcessId();
-#else
-		return getpid();
-#endif
-	}
-
-	int _getppid()
-    {
-#ifdef _WIN32
-        HANDLE hSnapshot;
-        PROCESSENTRY32 pe32;
-        DWORD ppid = 0, pid = GetCurrentProcessId();
-
-        hSnapshot = CreateToolhelp32Snapshot( TH32CS_SNAPPROCESS, 0 );
-        __try{
-            if( hSnapshot == INVALID_HANDLE_VALUE ) __leave;
-
-            ZeroMemory( &pe32, sizeof( pe32 ) );
-            pe32.dwSize = sizeof( pe32 );
-            if( !Process32First( hSnapshot, &pe32 ) ) __leave;
-
-            do{
-                if( pe32.th32ProcessID == pid ){
-                    ppid = pe32.th32ParentProcessID;
-                    break;
-                }
-            }while( Process32Next( hSnapshot, &pe32 ) );
-
-        }
-        __finally{
-            if( hSnapshot != INVALID_HANDLE_VALUE ) CloseHandle( hSnapshot );
-        }
-
-        return ppid;
-#else
-        return getppid();
-#endif
-    }
-
-    typedef struct {
-        uv_write_t req;
-        uv_buf_t buf;
-    } write_req_t;
-
-    const char* ToCString(const String::Utf8Value& value) {
-		return *value ? *value : "<string conversion failed>";
-    }
+  using v8::FunctionCallbackInfo;
+  using v8::Isolate;
+  using v8::Local;
+  using v8::Object;
+  using v8::String;
+  using v8::Value;
+  using v8::Number;
 
-    void alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
-		buf->base = (char *) malloc(suggested_size);
-		buf->len = suggested_size;
-    }
+  /* message buffer received from server */
+  char * returnValue;
 
-    void free_write_req(uv_write_t *req) {
-        write_req_t *wr = (write_req_t*) req;
-        free(wr->buf.base);
-        free(wr);
-    }
+  const char * pipeFile;
 
-    void on_client_closed(uv_handle_t * client){
+  /* the buffer's total length to be read from server */
+  int readFullLen;
 
-        free(client);
-    }
+  int parts;
 
-    void extractFirstInteger(char* origin, int * firstInt, char ** rest){
+  char** writings;
 
-        int count = strlen(origin);
-        int i = 0;
-        while(origin[i] != '#' && origin[i]){
-            i++;
-            if(i >= count){
-                break;
-            }
-        }
-
-        if(i >= count){
-            return;
-        }
-
-        char * pidSub = (char *) malloc(sizeof(char) * (i+1));
-        memcpy( pidSub,origin, i );
-        pidSub[i] = '\0';
-        *firstInt = atoi(pidSub);
-        free(pidSub);
-
-        *rest = (char *) malloc(sizeof(char) * (strlen(origin)-i));
-        memcpy(*rest,origin+i+1,strlen(origin)-i-1);
-        (*rest)[strlen(origin)-i-1] = '\0';
-
-    }
+  /* the client-side uv_pipe handle */
+  uv_pipe_t* client_handle;
 
-    void on_read_value(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
+  /* uv_loop created inside default loop*/
+  uv_loop_t * ipc_loop = NULL;
 
-        if (nread > 0) {
+  const char* ToCString(const String::Utf8Value& value) {
+  		return *value ? *value : "<string conversion failed>";
+  }
 
-            char * buffer = (char *) malloc(nread+1);
-            memcpy(buffer,buf->base,nread);
-            buffer[nread] = 0;
+  void alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
+    buf->base = (char *) malloc(suggested_size);
+    buf->len = suggested_size;
+  }
 
-            if(DEBUG) fprintf(stdout,"Client Read %ld: %s \n",nread,buffer);
 
-            char *body;
 
-            if(returnValue == NULL){
-                extractFirstInteger(buffer,&readFullLen,&body);
-                returnValue = (char *) malloc(readFullLen+1);
-                for(int i = 0; i <  readFullLen + 1; i++){
-                    returnValue[i] = 0;
-                }
-                free(buffer);
-            }
-            else{
-                body = buffer;
-            }
 
-            strcat(returnValue, body);
+  void extractFirstInteger(char* origin, int * firstInt, char ** rest){
 
-            free(body);
+      int count = strlen(origin);
+      int i = 0;
+      while(origin[i] != '#' && origin[i]){
+          i++;
+          if(i >= count){
+              break;
+          }
+      }
 
-            if(DEBUG) fprintf(stdout,"client received %d / %d \n", strlen(returnValue), readFullLen);
+      if(i >= count){
+          return;
+      }
 
-            if(strlen(returnValue) == readFullLen){
-                if(DEBUG) fprintf(stdout,"Client Read Finished %ld: %s \n",nread,returnValue);
+      char * pidSub = (char *) malloc(sizeof(char) * (i+1));
+      memcpy( pidSub,origin, i );
+      pidSub[i] = '\0';
+      *firstInt = atoi(pidSub);
+      free(pidSub);
 
-                uv_read_stop(client);
-                uv_close((uv_handle_t *) client,on_client_closed);
-            }
-        }
+      *rest = (char *) malloc(sizeof(char) * (strlen(origin)-i));
+      memcpy(*rest,origin+i+1,strlen(origin)-i-1);
+      (*rest)[strlen(origin)-i-1] = '\0';
 
-        if (nread < 0) {
-            if (nread != UV_EOF)
-                if(DEBUG) fprintf(stderr, "Read error %s\n", uv_err_name(nread));
-            uv_close((uv_handle_t*) client, on_client_closed);
-        }
+  }
 
-        free(buf->base);
-    }
+  void on_client_closed(uv_handle_t * client){
 
-    void write_cb(uv_write_t* req, int status) {
+      free(client);
+  }
 
-       if (status != 0) {
-               if(DEBUG) fprintf(stderr, "Client Write error %s\n", uv_err_name(status));
-       }
-       free_write_req(req);
+  void on_read_value(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
 
-       int fullLength = strlen(writeValue);
+      if (nread > 0) {
 
-       if(writingOffset < fullLength){
-		   // continue writing
-            write();
-       }
-       else{
-            free(writeValue);
-        }
-    }
+          char * buffer = (char *) malloc(nread+1);
+          memcpy(buffer,buf->base,nread);
+          buffer[nread] = 0;
 
-    void write(){
+          if(DEBUG) fprintf(stdout,"Client Read %ld: %s \n",nread,buffer);
 
-        int fullLength = strlen(writeValue);
-        int finished = 0;
-        if( fullLength-writingOffset <= MAX_BUFFER_LENGTH){
-            finished = 1;
-        }
-        int len = (finished)? fullLength-writingOffset : MAX_BUFFER_LENGTH;
+          char *body;
 
+          if(returnValue == NULL){
+              extractFirstInteger(buffer,&readFullLen,&body);
+              returnValue = (char *) malloc(readFullLen+1);
+              for(int i = 0; i <  readFullLen + 1; i++){
+                  returnValue[i] = 0;
+              }
+              free(buffer);
+          }
+          else{
+              body = buffer;
+          }
 
-        char *buffer;
-        if(writingOffset == 0){
-             int lenDigits = getIntDigits(fullLength);
-             buffer = (char *) malloc(sizeof(char)*(pid_digits+1+lenDigits+1+len+1));
-             sprintf(buffer,"%d#%d#",pid,fullLength);
-             memcpy(buffer+pid_digits+1+lenDigits+1,writeValue+writingOffset,len);
-             buffer[pid_digits+1+lenDigits+1+len] = 0;
-        }
-        else{
-            buffer = (char *) malloc(sizeof(char)*(len+1));
-            memcpy(buffer,writeValue+writingOffset,len);
-            buffer[len] = 0;
-        }
-        writingOffset += len;
+          strcat(returnValue, body);
 
-        if(DEBUG) fprintf(stdout,"client write %s \n", buffer);
+          free(body);
 
-        write_req_t *wreq = (write_req_t*) malloc(sizeof(write_req_t));
+          if(DEBUG) fprintf(stdout,"client received %d / %d \n", strlen(returnValue), readFullLen);
 
-        wreq->buf = uv_buf_init(buffer, strlen(buffer));
+          if(strlen(returnValue) == readFullLen){
+              if(DEBUG) fprintf(stdout,"Client Read Finished %ld: %s \n",nread,returnValue);
 
-        uv_write(&wreq->req, (uv_stream_t *)client_handle, &wreq->buf, 1, write_cb);
-    }
+              uv_read_stop(client);
+              uv_close((uv_handle_t *) client,on_client_closed);
+          }
+      }
 
-    void on_client_connected(uv_connect_t* req, int status){
+      if (nread < 0) {
+          if (nread != UV_EOF)
+              if(DEBUG) fprintf(stderr, "Read error %s\n", uv_err_name(nread));
+          uv_close((uv_handle_t*) client, on_client_closed);
+      }
 
-        if (status != 0) {
-            // error!
-            if(DEBUG) fprintf(stdout,"client connection error %s\n", uv_err_name(status));
+      free(buf->base);
+  }
 
-        }
+  void on_client_connected(uv_connect_t* req, int status){
 
-        else{
+      if (status != 0) {
+          // error!
+          if(DEBUG) fprintf(stdout,"client connection error %s\n", uv_err_name(status));
 
-            if(DEBUG) fprintf(stdout,"client connected %d \n", status);
+      }
 
-            returnValue = NULL;
+      else{
 
-            uv_read_start((uv_stream_t*) req->handle, alloc_buffer, on_read_value);
+          if(DEBUG) fprintf(stdout,"client connected %d \n", status);
 
-            writingOffset = 0;
+          returnValue = NULL;
 
-            write();
+          uv_read_start((uv_stream_t*) req->handle, alloc_buffer, on_read_value);
 
-        }
+          debug("start send data, data has %d parts\n", parts);
 
+          utils::writeData((uv_stream_t*) client_handle, writings, parts);
 
-        free(req);
+      }
 
-    }
 
-    char * getPipeName(){
+      free(req);
 
-        char * pipename;
+  }
 
-        if(server_pid == 0){
-            server_pid = _getppid();
-        }
-        int temp = server_pid;
-        int server_pid_digits = 0;
-        while(temp>0){
-           server_pid_digits += 1;
-           temp /= 10;
-        }
-        #ifdef _WIN32
-        const char* pipename_preset = "\\\\.\\pipe\\nodePipe";
-        int pipnameLen = (strlen(pipename_preset)+server_pid_digits+1);
-        pipename = (char *) malloc(sizeof(char) * pipnameLen);
-        sprintf(pipename,"%s%d",pipename_preset,server_pid);
-        pipename[pipnameLen] = 0;
-        #else
-        const char *homedir;
-        if ((homedir = getenv("HOME")) == NULL) {
-            homedir = getpwuid(getuid())->pw_dir;
-        }
-        const char* pipename_preset = "nodePipe";
-        int pipnameLen = (strlen(pipename_preset)+server_pid_digits+strlen(homedir)+7);
-        pipename = (char *) malloc(sizeof(char) * pipnameLen);
-        sprintf(pipename,"/%s/%s%d.sock",homedir,pipename_preset,server_pid);
-        pipename[pipnameLen] = 0;
-        #endif
+  /* connect to server and send message.
+    	Here we create a new uv_loop inside default loop to block the default loop. */
+  void connect_and_send(){
 
-        if(DEBUG) fprintf(stdout,"set pipe to %s\n", pipename);
+      ipc_loop = (uv_loop_t *) malloc(sizeof(uv_loop_t));
 
-        return pipename;
-    }
+      uv_loop_init(ipc_loop);
 
-	/* connect to server and send message.
-	Here we create a new uv_loop inside default loop to block the default loop. */
-    void connect_and_send(){
+      uv_connect_t* req = (uv_connect_t *) malloc(sizeof(uv_connect_t));
 
-        ipc_loop = (uv_loop_t *) malloc(sizeof(uv_loop_t));
+      client_handle = (uv_pipe_t *) malloc(sizeof(uv_pipe_t));
 
-        uv_loop_init(ipc_loop);
+      uv_pipe_init(ipc_loop, client_handle,0);
 
-        uv_connect_t* req = (uv_connect_t *) malloc(sizeof(uv_connect_t));
+      if(DEBUG) fprintf(stdout,"connecting to server %s\n", pipeFile);
 
-        client_handle = (uv_pipe_t *) malloc(sizeof(uv_pipe_t));
+      uv_pipe_connect(req, client_handle, pipeFile, on_client_connected);
 
-        uv_pipe_init(ipc_loop, client_handle,0);
+      /* the next statement will block default loop until client_handle stops. */
+      uv_run(ipc_loop,UV_RUN_DEFAULT);
 
-        char * pipename = getPipeName();
+      if(DEBUG) fprintf(stdout,"connect loop successfully closed\n");
 
-        if(DEBUG) fprintf(stdout,"connecting to server %s\n", pipename);
+      uv_loop_close(ipc_loop);
 
-        uv_pipe_connect(req, client_handle, pipename, on_client_connected);
+      free(ipc_loop);
 
-		/* the next statement will block default loop until client_handle stops. */
-        uv_run(ipc_loop,UV_RUN_DEFAULT);
+  }
 
-        if(DEBUG) fprintf(stdout,"connect loop successfully closed\n");
+  /* Send sync method */
+  NAN_METHOD(send){
 
-        uv_loop_close(ipc_loop);
+      if (info.Length() > 1) {
 
-        free(ipc_loop);
+          if (info[0]->IsString()) {
 
-    }
+             String::Utf8Value str(info[0]->ToString());
 
-	/* Set the server's pid, in order to find the current pipe */
-    NAN_METHOD(setPid){
-        if (info.Length() > 0) {
-            if (info[0]->IsNumber()) {
+             pipeFile = ToCString(str);
 
-                server_pid = (int) Local<Number>::Cast(info[0])->NumberValue();
+             if (info[1]->IsString()) {
 
+                   String::Utf8Value str(info[0]->ToString());
 
-            }
-        }
-    }
+                   const char* s = ToCString(str);
 
-	/* Send sync method */
-    NAN_METHOD(send){
+                   debug("get data to send, data has %d parts\n", info.Length() - 1);
+                   char* strings[info.Length()-1];
+                   for (int i = 0; i < info.Length() - 1; i ++) {
+                     v8::String::Utf8Value str(info[i+1]->ToString());
+                     char * value = strdup(ToCString(str));
+                     strings[i] = value;
+                   }
 
-        if (info.Length() > 0) {
+                   writings = strings;
 
-            if (info[0]->IsString()) {
+                   parts = info.Length() - 1;
 
-                  String::Utf8Value str(info[0]->ToString());
+                   connect_and_send();
 
-                  const char* s = ToCString(str);
+                   if(returnValue != NULL){
+                     info.GetReturnValue().Set(Nan::New<v8::String>(returnValue).ToLocalChecked());
+                     free(returnValue);
 
-                  writeValue = strdup(s);
+                     returnValue = NULL;
 
-                  if(DEBUG) fprintf(stdout, "send Sync length %d \n", strlen(writeValue) );
+                     if(DEBUG) fprintf(stdout, "send Sync result success \n");
+                     return;
+                   }
+                   else{
+                     Nan::ThrowError("Failed To Send Sync");
+                   }
 
-                  connect_and_send();
+             }
 
-                  if(returnValue != NULL){
-                    info.GetReturnValue().Set(Nan::New<v8::String>(returnValue).ToLocalChecked());
-                    free(returnValue);
+          }
 
-                    returnValue = NULL;
+      }
+      info.GetReturnValue().Set(Nan::Null());
+  }
 
-                    if(DEBUG) fprintf(stdout, "send Sync result success \n");
-                    return;
-                  }
-                  else{
-                    Nan::ThrowError("Failed To Send Sync");
-                  }
+  NAN_MODULE_INIT(init) {
 
-            }
-        }
-        info.GetReturnValue().Set(Nan::Null());
-    }
+    Nan::SetMethod(target, "sendSync", send);
 
+  }
 
-    NAN_MODULE_INIT(init) {
-
-		Nan::SetMethod(target, "sendSync", send);
-		Nan::SetMethod(target, "setServerPid", setPid);
-
-        pid = _getpid();
-		pid_digits = getIntDigits(pid);
-
-    }
-
-    NODE_MODULE(NODE_GYP_MODULE_NAME, init)
-
-
-
+  NODE_MODULE(NODE_GYP_MODULE_NAME, init)
 }
-
-
-
-

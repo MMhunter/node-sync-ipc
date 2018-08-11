@@ -1,40 +1,15 @@
-import * as child_process from "child_process";
-
 export = NodeSyncIpc;
 export as namespace NodeSyncIpc;
 
 declare namespace NodeSyncIpc{
 
-    interface NodeSyncIpcParent{
-
-        fork(modulePath:string,args?:any[],options?:Object): NodeSyncIpcChildProcess;
-
-        addChild(childProcess:child_process.ChildProcess): NodeSyncIpcChildProcess;
-
-    }
-
-    interface NodeSyncIpcChildProcess extends child_process.ChildProcess{
-
-        onSync(event:string,listener:(res:(returnValue?:any)=>void,...args:any[])=>void):any;
-
-    }
-
-
-    interface NodeSyncIpcChild{
-
-        sendSync(event:string,...args:any[]):any;
-
-    }
-
-    export function parent():NodeSyncIpcParent;
-
-    export function child():NodeSyncIpcChild;
-
-    export type MessageListener = (res:(returnValue?:any)=>void, pid:number, ...args:any[]) => void
+    export type MessageListener = (res:(returnValue?:any)=>void, ...args:any[]) => void
 
     export class SyncIPCServer {
 
-        public start(handle?:number): void;
+        constructor(pipeFile: string);
+
+        public startListen(): void;
 
         public onMessage(event: string, listener: MessageListener): void;
 
@@ -50,5 +25,9 @@ declare namespace NodeSyncIpc{
         sendSync(event:string,...args:any[]):any;
 
     }
+}
+
+declare module 'node-sync-ipc' {
+  export = NodeSyncIpc;
 }
 

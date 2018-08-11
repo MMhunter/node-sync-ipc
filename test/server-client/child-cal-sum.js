@@ -3,7 +3,9 @@
  *
  * Created by mmhunter on 17/10/2017.
  */
-var syncIpc = new (require("../../index").SyncIPCClient)(100);
+const path = require("path");
+
+var syncIpc = new (require("../../index").SyncIPCClient)(path.join(require('os').tmpdir(), 'temp.sock'));
 
 let sum = 0;
 

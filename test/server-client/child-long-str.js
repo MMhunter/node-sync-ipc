@@ -3,7 +3,7 @@
  *
  * Created by mmhunter on 17/10/2017.
  */
-var syncIpc = new (require("../../index").SyncIPCClient)(1001);
+var syncIpc = new (require("../../index").SyncIPCClient)(require("path").join(require('os').tmpdir(), 'temp.sock'));
 
 let longStrArray = [];
 

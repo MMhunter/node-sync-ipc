@@ -1,7 +1,7 @@
 {
   "name": "node-sync-ipc",
   "version": "3.0.0",
-  "description": "node-sync-ipc is a tiny library making it possible for child node.js processes created by child_process.fork to send synchronous message to parent process. It can block the child process until the parent make a response. This use case is kind of rare but I hope it can be of some help if anyone needs.",
+  "description": "`node-sync-ipc` is a tiny library making it possible for node processes to send synchronous message to other processes. It can block the client side process until the server make a response.",
   "main": "index.js",
   "scripts": {
     "test": "npm run test:server-client",

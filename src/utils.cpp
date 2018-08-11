@@ -2,6 +2,7 @@
 #include <uv.h>
 #include <nan.h>
 #include <string.h>
+#include <stdarg.h>
 #include "basic.h"
 
 

@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "npm run test:server-client",
-    "test:server-client": "mocha test/server-client/parent.js --timeout 50000",
+    "test:server-client": "mocha test/server-client/parent.js --timeout 5000",
     "rebuild": "node-gyp rebuild"
   },
   "author": "mmhunter <mmhunter@mmhunter.com (http://mmhunter.com)",

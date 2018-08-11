@@ -13,7 +13,6 @@ npm install node-sync-ipc
 ````
 
 # Usage
-## Server And Client Mode
 
 Server side:
 
@@ -54,7 +53,7 @@ Client Side:
 
 const SyncIPCClient = require("node-sync-ipc").SyncIPCClient;
 
-// handle number
+// pipe File to connect to
 const serverHandle = path.join(require('os').tmpDir(), 'tmp.sock');
 
 const client = new SyncIPCClient(serverHandle);

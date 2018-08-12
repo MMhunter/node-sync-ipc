@@ -199,7 +199,7 @@ namespace client {
                    const char* s = ToCString(str);
 
                    debug("get data to send, data has %d parts\n", info.Length() - 1);
-                   char* strings[info.Length()-1];
+                   char** strings = new char *[info.Length()-1];
                    for (int i = 0; i < info.Length() - 1; i ++) {
                      v8::String::Utf8Value str(info[i+1]->ToString());
                      char * value = strdup(ToCString(str));
@@ -211,6 +211,8 @@ namespace client {
                    parts = info.Length() - 1;
 
                    connect_and_send();
+
+                   delete[] strings;
 
                    if(returnValue != NULL){
                      info.GetReturnValue().Set(Nan::New<v8::String>(returnValue).ToLocalChecked());

@@ -54,7 +54,7 @@ namespace server {
 
       static v8::Local<v8::Object> newInstance(uv_pipe_t* handle){
         v8::Local<v8::Function> cons = Nan::New(constructor());
-        v8::Local<v8::Value> argv[0] = {};
+        v8::Local<v8::Value> argv[1] = {};
         v8::Local<v8::Object> instance = Nan::NewInstance(cons, 0, argv).ToLocalChecked();
         Connection* obj = Nan::ObjectWrap::Unwrap<Connection>(instance);
         obj->setHandle(handle);
@@ -131,13 +131,14 @@ namespace server {
 
       static NAN_METHOD(Write) {
         Connection* obj = Nan::ObjectWrap::Unwrap<Connection>(info.Holder());
-        char* strings[info.Length()];
+        char** strings = new char*[info.Length()];
         for (int i = 0; i < info.Length(); i ++) {
           v8::String::Utf8Value str(info[i]->ToString());
           char * value = strdup(ToCString(str));
           strings[i] = value;
         }
         utils::writeData((uv_stream_t *) obj->handle, strings, info.Length());
+        delete[] strings;
       }
 
       static NAN_METHOD(onMessageBind) {

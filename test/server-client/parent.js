@@ -11,14 +11,17 @@ const childProcess = require('child_process');
 
 describe("Server Client Mode Test",()=>{
 
-
-
-
-
+   function getPipeFile(index){
+       if (require('os').platform() === 'win32') {
+           return "\\\\.\\pipe\\" + `sync-ipc-test-${index}`;
+       } else {
+           return require("path").join(require('os').tmpdir(), `temp${index}.sock`);
+       }
+   }
 
   it("should get the right sum",(done)=>{
 
-        const pipeFile = require("path").join(require('os').tmpdir(), 'temp1.sock');
+        const pipeFile = getPipeFile(1);
 
         const server = new SyncIPCServer(pipeFile);
 
@@ -49,7 +52,7 @@ describe("Server Client Mode Test",()=>{
 
     it("should get the right sum [using add child]",(done)=>{
 
-      const pipeFile = require("path").join(require('os').tmpdir(), 'temp2.sock');
+      const pipeFile = getPipeFile(2);
 
       const server = new SyncIPCServer(pipeFile);
 
@@ -80,7 +83,7 @@ describe("Server Client Mode Test",()=>{
 
     it("long arr should be same",(done)=>{
 
-      const pipeFile = require("path").join(require('os').tmpdir(), 'temp3.sock');
+      const pipeFile = getPipeFile(3);
 
       const server = new SyncIPCServer(pipeFile);
 
@@ -112,7 +115,7 @@ describe("Server Client Mode Test",()=>{
 
     it("multiple child share data",(done)=>{
 
-      const pipeFile = require("path").join(require('os').tmpdir(), 'temp4.sock');
+      const pipeFile = getPipeFile(4);
 
       const server = new SyncIPCServer(pipeFile);
 

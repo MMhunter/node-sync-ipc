@@ -25,6 +25,7 @@ const SyncIPCServer = require("node-sync-ipc").SyncIPCServer;
 // pipe File
 // on Unix based systems, pipe file should be a sock file path
 // on Windows, pipe should be named pipes
+// const pipeFile = "\\\\.\\pipe\\somePipeName"; // <- windows
 const pipeFile = path.join(require('os').tmpDir(), 'tmp.sock');
 
 const server = new SyncIPCServer(pipeFile);

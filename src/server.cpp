@@ -8,7 +8,7 @@
 namespace server {
   using std::map;
 
-  const char* ToCString(const v8::String::Utf8Value& value) {
+  const char* ToCString(const Nan::Utf8String& value) {
     return *value ? *value : "<string conversion failed>";
   }
 
@@ -133,7 +133,7 @@ namespace server {
         Connection* obj = Nan::ObjectWrap::Unwrap<Connection>(info.Holder());
         char** strings = new char*[info.Length()];
         for (int i = 0; i < info.Length(); i ++) {
-          v8::String::Utf8Value str(info[i]->ToString());
+          Nan::Utf8String str(info[i]);
           char * value = strdup(ToCString(str));
           strings[i] = value;
         }
@@ -295,7 +295,7 @@ namespace server {
 
       static NAN_METHOD(New) {
         if (info.IsConstructCall()) {
-          v8::String::Utf8Value str(info[0]->ToString());
+          Nan::Utf8String str(info[0]);
           char * value = strdup(ToCString(str));
           SyncIpcServer *obj = new SyncIpcServer(value);
           obj->Wrap(info.This());

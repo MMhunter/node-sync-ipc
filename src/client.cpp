@@ -34,7 +34,7 @@ namespace client {
   /* uv_loop created inside default loop*/
   uv_loop_t * ipc_loop = NULL;
 
-  const char* ToCString(const String::Utf8Value& value) {
+  const char* ToCString(const Nan::Utf8String& value) {
   		return *value ? *value : "<string conversion failed>";
   }
 
@@ -188,20 +188,20 @@ namespace client {
 
           if (info[0]->IsString()) {
 
-             String::Utf8Value str(info[0]->ToString());
+             Nan::Utf8String str(info[0]);
 
              pipeFile = ToCString(str);
 
              if (info[1]->IsString()) {
 
-                   String::Utf8Value str(info[0]->ToString());
+                   Nan::Utf8String str(info[0]);
 
                    const char* s = ToCString(str);
 
                    debug("get data to send, data has %d parts\n", info.Length() - 1);
                    char** strings = new char *[info.Length()-1];
                    for (int i = 0; i < info.Length() - 1; i ++) {
-                     v8::String::Utf8Value str(info[i+1]->ToString());
+                     Nan::Utf8String str(info[i+1]);
                      char * value = strdup(ToCString(str));
                      strings[i] = value;
                    }

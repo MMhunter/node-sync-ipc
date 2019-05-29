@@ -1,6 +1,6 @@
 {
   "name": "node-sync-ipc",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "description": "`node-sync-ipc` is a tiny library making it possible for node processes to send synchronous message to other processes. It can block the client side process until the server make a response.",
   "main": "index.js",
   "scripts": {
@@ -13,7 +13,7 @@
   "gypfile": true,
   "dependencies": {
     "bindings": "^1.3.0",
-    "nan": "^2.7.0"
+    "nan": "^2.13.0"
   },
   "repository": {
     "type": "git",

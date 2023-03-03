@@ -31,7 +31,7 @@
   "types": "index.d.ts",
   "devDependencies": {
     "@types/node": "^9.6.0",
-    "mocha": "^5.0.1",
+    "mocha": "^10.2.0",
     "readline-sync": "^1.4.9"
   }
 }
